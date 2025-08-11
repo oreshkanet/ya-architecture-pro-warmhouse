@@ -1,0 +1,20 @@
+puml
+@startuml
+title WarmHouse Context Diagram
+
+top to bottom direction
+
+!include ../c4/C4_Component.puml
+
+Person_Ext(user, "User", "Пользователь системы ")
+Person(support, "Support", "Специалист поддержки")
+System(WarmHouseSystem, "WarmHouse System", "Система управления тёплым домом")
+
+System_Ext(sensor, "Temperature Sensor", "Датчик управления отоплением", "Uses HTTP API, Request data format")
+
+Rel(user, WarmHouseSystem, "Управляет отоплением, просматривает температуру")
+Rel(support, WarmHouseSystem, "Подключает новые датчики, осуществляет поддержку пользователей")
+Rel(WarmHouseSystem, sensor, "Команды управления отоплением")
+Rel(WarmHouseSystem, sensor, "Получение данных о температуре")
+
+@enduml
