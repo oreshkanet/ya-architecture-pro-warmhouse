@@ -1,0 +1,35 @@
+puml
+@startuml WarmHouse_Container_ToBe
+title WarmHouse Container Diagram
+
+top to bottom direction
+
+!include ../c4/C4_Container.puml
+
+Person_Ext(User, "User", "Пользователь системы")
+Person(Support, "Support", "Специалист поддержки")
+
+System_Boundary(WarmHouseSystem, "WarmHouse System") {
+  Container_Boundary(UserDomain, "Личный кабинет") {
+        Container(WebApp, "Web Application", "Java, Spring", "Web-интерфейс для работы с системой")
+        Container(MobileApp, "Mobile Application", "Kotlin, Swift", "Мобильное приложение для работы с системой")
+        Container(BackendForFrontend, "Application Backend", "Node.JS", "")
+        Container(UserService, "User Service", "Node.JS", "Регистрация пользователей и управление профилем")
+        Container(AuthService, "Auth Service", "Node.JS", "Аутентификация и авторизация в системе")
+        ContainerDb(UsersDatabase, "Users Database", "PostgreSQL", "Хранение данных о пользователях системы")
+        
+        Rel(WebApp, BackendForFrontend, "", "https")
+        Rel(MobileApp, BackendForFrontend, "", "https")
+        Rel(BackendForFrontend, UserService, "Получение данных профиля пользователей", "https")
+        Rel(BackendForFrontend, AuthService, "Авторизация пользователей", "https")        
+        Rel_R(UserService, UsersDatabase, "Чтение/запись данных пользователя")
+        Rel_L(AuthService, UsersDatabase, "Чтение данных пользователя для авторизации")
+    }
+}
+
+' Взаимодействие пользователей с системой
+Rel(User, WebApp, "Подключает и управляет новыми устройствами, Настраивает сценарии, Просматривает телеметрию")
+Rel(User, MobileApp, "Подключает и управляет новыми устройствами, Настраивает сценарии, Просматривает телеметрию")
+Rel(Support, WebApp, "Осуществляет поддержку пользователей")
+
+@enduml
