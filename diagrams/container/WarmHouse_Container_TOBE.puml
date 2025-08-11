@@ -1,0 +1,214 @@
+@startuml WarmHouse_Container_ToBe
+title WarmHouse Container Diagram
+
+top to bottom direction
+
+'!include ../c4/C4_Container.puml
+!includeurl https://raw.githubusercontent.com/RicardoNiepel/C4-PlantUML/master/C4_Component.puml
+
+'System(WarmHouseSystem, "WarmHouse System", "Система управления тёплым домом")
+
+Person_Ext(User, "User", "Пользователь системы")
+Person(Support, "Support", "Специалист поддержки")
+
+    System_Ext(WarmDevice, "Warm Device", "Датчик управления отоплением", "Uses HTTP API, Request data format")
+    System_Ext(LightDevice, "Light Device", "Датчик управления светом", "Uses HTTP API, Request data format")
+    System_Ext(DoorDevice, "Door Device", "Датчик управления воротами", "Uses HTTP API, Request data format")
+    System_Ext(UniversalDevice, "Universal Device", "Универсальный датчик управления", "Uses HTTP API, Request data format")
+
+
+
+System_Boundary(WarmHouseSystem, "WarmHouse System") {
+    Container_Boundary(UserDomain, "Личный кабинет") {
+        Container(WebApp, "Web Application", "Java, Spring", "Web-интерфейс для работы с системой")
+        Container(MobileApp, "Mobile Application", "Kotlin, Swift", "Мобильное приложение для работы с системой")
+        Container(BackendForFrontend, "Application Backend", "Node.JS", "")
+        Rel(WebApp, BackendForFrontend, "", "https")
+        Rel(MobileApp, BackendForFrontend, "", "https")
+
+        Container(UserService, "User Service", "Node.JS", "Регистрация пользователей и управление профилем")
+        Rel(BackendForFrontend, UserService, "Получение данных профиля пользователей", "https")
+
+        Container(AuthService, "Auth Service", "Node.JS", "Аутентификация и авторизация в системе")
+        Rel(BackendForFrontend, AuthService, "Авторизация пользователей", "https")
+
+        ContainerDb(UsersDatabase, "Users Database", "PostgreSQL", "Хранение данных о пользователях системы")
+        Rel(UserService, UsersDatabase, "Чтение/запись данных пользователя")
+        Rel(AuthService, UsersDatabase, "Чтение данных пользователя для авторизации")
+    }
+
+    Container_Boundary(DeviceDomain, "Управление устройствами") {
+        Container_Boundary(UserDeviceDomain, "Управление устройствами пользователя") {
+            Container(DeviceManagementService, "Device Management Service", "Go", "Подключение и отключение устройств различных типов, предоставление информации о подключенных устройствах")
+            
+            ContainerDb(DeviceDatabase, "Device Database", "PostgreSQL", "Хранение данных о подключенных устройствах пользователей")
+
+            Rel(DeviceManagementService, DeviceDatabase, "Чтение/запись данных устройств")
+        }
+    
+        Container_Boundary(WarmDeviceDomain, "Управление отоплением") {
+            Container(WarmService, "Warm Service", "Go", "Приём команды установки значений параметров устройства отопления") 
+            Container(WarmTelemetryConnector, "Warm Telemetry Connector", "Go", "Сбор и получение телеметрии устройства отопления") 
+            ContainerQueue(WarmQueue, "Warm Queue", "RabbitMQ", "Организация асинхронной доставки команд устройству")
+            Container(WarmConnector, "Warm Connector", "Go", "Передача командды установки параметров отопления устройству")
+            ContainerDb(WarmCache, "Warm Cache", "Redis", "Кэширование параметров подключения к устройствам")
+            
+            Rel(WarmService, WarmCache, "Запись параметров подключения к устройствам")
+            Rel(WarmConnector, WarmCache, "Чтение параметров подключения к устройствам")
+            Rel(WarmTelemetryConnector, WarmCache, "Чтение параметров подключения к устройствам")
+            Rel(WarmQueue, WarmConnector, "Чтение команд на отправку устройствам")
+            Rel(WarmService, WarmQueue, "Запись команд на отправку устройствам")
+            
+        }
+
+       
+        Container_Boundary(LightDeviceDomain, "Управление светом") {
+            Container(LightService, "Light Service", "Go", "Приём команды установки значений параметров устройства отопления") 
+            Container(LightConnector, "Light Connector", "Go", "Передача командды установки параметров отопления устройству")
+            Container(LightTelemetryConnector, "Light Telemetry Connector", "Go", "Сбор и получение телеметрии устройства отопления")
+            ContainerQueue(LightQueue, "Light Queue", "RabbitMQ", "Организация асинхронной доставки команд устройству")
+            ContainerDb(LightCache, "Light Cache", "Redis", "Кэширование параметров подключения к устройствам")
+
+            Rel(LightService, LightCache, "Запись параметров подключения к устройствам")
+            Rel(LightConnector, LightCache, "Чтение параметров подключения к устройствам")
+            Rel(LightTelemetryConnector, LightCache, "Чтение параметров подключения к устройствам")
+            Rel(LightService, LightQueue, "Запись команд на отправку устройствам")
+            Rel(LightQueue, LightConnector, "Чтение команд на отправку устройствам")
+        }
+
+        
+
+        Container_Boundary(DoorDeviceDomain, "Управление воротами") {
+            Container(DoorService, "Door Service", "Go", "Приём команды установки значений параметров устройства отопления") 
+            Container(DoorConnector, "Door Connector", "Go", "Передача командды установки параметров отопления устройству")
+            Container(DoorTelemetryConnector, "Door Telemetry Connector", "Go", "Сбор и получение телеметрии устройства отопления")
+            ContainerQueue(DoorQueue, "Door Queue", "RabbitMQ", "Организация асинхронной доставки команд устройству")
+            ContainerDb(DoorCache, "Door Cache", "Redis", "Кэширование параметров подключения к устройствам")
+
+            Rel(DoorService, DoorCache, "Запись параметров подключения к устройствам")
+            Rel(DoorConnector, DoorCache, "Чтение параметров подключения к устройствам")
+            Rel(DoorTelemetryConnector, DoorCache, "Чтение параметров подключения к устройствам")
+            Rel(DoorService, DoorQueue, "Запись команд на отправку устройствам")
+            Rel(DoorQueue, DoorConnector, "Чтение команд на отправку устройствам")
+        }
+
+        
+
+        Container_Boundary(UniversalDeviceDomain, "Управление универсальными устройствами") {
+            Container(UniversalService, "Universal Service", "Go", "Приём команды установки значений параметров устройства отопления") 
+            Container(UniversalConnector, "Universal Connector", "Go", "Передача командды установки параметров отопления устройству")
+            Container(UniversalTelemetryConnector, "Universal Telemetry Connector", "Go", "Сбор и получение телеметрии устройства отопления")
+            ContainerQueue(UniversalQueue, "Universal Queue", "RabbitMQ", "Организация асинхронной доставки команд устройству")
+            ContainerDb(UniversalCache, "Universal Cache", "Redis", "Кэширование параметров подключения к устройствам")
+
+            Rel(UniversalService, UniversalCache, "Запись параметров подключения к устройствам")
+            Rel(UniversalConnector, UniversalCache, "Чтение параметров подключения к устройствам")
+            Rel(UniversalTelemetryConnector, UniversalCache, "Чтение параметров подключения к устройствам")
+            Rel(UniversalService, UniversalQueue, "Запись команд на отправку устройствам")
+            Rel(UniversalQueue, UniversalConnector, "Чтение команд на отправку устройствам")
+        }
+
+        
+
+    }
+
+    Container_Boundary(ScenarioDomain, "Сценарии устройств") {
+        Container_Boundary(ScenarioManagementDomain, "Управление сценариями") {
+            Container(ScenarioService, "Scenario Service", "Go", "Создание, удаление и управление активностью сценария, предоставление информации о сценариях пользователя")
+            Container(ScenarioWorkflowService, "Scenario Workflow Service", "Go", "Настройка workflow выполнения сценария")
+            ContainerDb(ScenarioDatabase, "Scenario Database", "PostgreSQL", "Хранение данных о сценариях и настройках их workflow")
+            
+            Rel(ScenarioService, ScenarioDatabase, "Чтение/Запись сценариев")
+            Rel(ScenarioWorkflowService, ScenarioDatabase, "Чтение/Запись настроек workflow сценариев")
+        }
+
+        Container_Boundary(ScenarioProcessingDomain, "Выполнение сценариев") {
+            Container(ScenarioTriggerService, "Scenario Trigger Service", "Go", "Асинхронное получение потока телеметрии для запуска триггеров по условию")
+            Container(ScenarioProcessingService, "Scenario Processing Service", "Go", "Выполнение workflow сценария")
+            ContainerDb(ScenarioCacheDatabase, "Scenario Cache", "Redis", "Хранение состояния выполнения запущенных процессов")
+            ContainerQueue(ScenarioQueueService, "Scenario Queue", "RabbitMQ", "Асинхронное получение потока телеметрии для запуска триггеров по условию")
+
+            Rel(ScenarioTriggerService, ScenarioCacheDatabase, "Чтение/Запись триггеров активных сценариев")
+            Rel(ScenarioProcessingService, ScenarioCacheDatabase, "Чтение/Запись состояния запущенных процессов")
+
+            Rel(ScenarioQueueService, ScenarioTriggerService, "Асинхронное получение телеметрии устройств")
+            Rel(ScenarioTriggerService, ScenarioProcessingService, "Передача данных о срабатывании триггера")     
+        }
+    }
+  
+    Container_Boundary(TelemetryDomain, "Телеметрия устройств") {
+        Container(TelemetryProcessingService, "Telemetry Processing Service", "Go", "Обработка показателей телеметрии устройств")
+        Container(TelemetryDashboardService, "Telemetry Dashboard Service", "Go", "Предоставление различной информации о телеметрии в различных срезах")
+        ContainerQueue(TelemetryQueueService, "Telemetry Queue", "RabbitMQ", "Доставка показателей телеметрии")
+        ContainerDb(TelemetryDatabase, "Telemetry Database", "PostgreSQL", "Хранение данных о телеметрии устройств")
+
+        Rel(TelemetryQueueService, TelemetryProcessingService, "Обработка потока телеметрии")
+        Rel(TelemetryProcessingService, TelemetryDatabase, "Запись показателей телеметрии")
+        Rel(TelemetryDashboardService, TelemetryDatabase, "Чтение показателей телеметрии")
+    }
+
+}
+
+    Lay_D(WarmDeviceDomain, LightDeviceDomain)
+    Lay_D(LightDeviceDomain, DoorDeviceDomain)
+
+    ' Взаимодействие пользователей с системой
+    Rel(User, WebApp, "Подключает и управляет новыми устройствами, Настраивает сценарии, Просматривает телеметрию")
+    Rel(User, MobileApp, "Подключает и управляет новыми устройствами, Настраивает сценарии, Просматривает телеметрию")
+    Rel(Support, WebApp, "Осуществляет поддержку пользователей")
+
+ ' Взаимодействие с внешними устройствами
+    Rel(WarmConnector, WarmDevice, "Отправка команд устройству")
+    Rel(WarmTelemetryConnector, WarmDevice, "Сбор телеметрии с устройства")
+    Rel(WarmDevice, WarmTelemetryConnector, "Получение телеметрии от устройства")
+
+Rel(LightConnector, LightDevice, "Отправка команд устройству")
+        Rel(LightTelemetryConnector, LightDevice, "Сбор телеметрии с устройства")
+        Rel(LightDevice, LightTelemetryConnector, "Получение телеметрии от устройства")
+
+
+    Rel(UniversalConnector, UniversalDevice, "Отправка команд устройству")
+Rel(UniversalTelemetryConnector, UniversalDevice, "Сбор телеметрии с устройства")
+Rel(UniversalDevice, UniversalTelemetryConnector, "Получение телеметрии от устройства")
+
+Rel(DoorConnector, DoorDevice, "Отправка команд устройству")
+        Rel(DoorTelemetryConnector, DoorDevice, "Сбор телеметрии с устройства")
+        Rel(DoorDevice, DoorTelemetryConnector, "Получение телеметрии от устройства")
+
+
+
+    ' Поддомен Warm
+    Rel(WarmService, DeviceManagementService, "Получение параметров устройств")
+    Rel(LightService, DeviceManagementService, "Получение параметров устройств")
+    Rel(DoorService, DeviceManagementService, "Получение параметров устройств")
+    Rel(UniversalService, DeviceManagementService, "Получение параметров устройств")
+
+
+    ' Поддомен ScenarioManagementDomain
+    Rel(ScenarioWorkflowService, DeviceManagementService, "Получение параметров устройств")
+
+    ' Поддомен ScenarioProcessingDomain
+    Rel(WarmTelemetryConnector, ScenarioQueueService, "Телеметрия устройства отопления")
+    Rel(ScenarioProcessingService, WarmService, "Команды устройству отопления")
+    Rel(ScenarioProcessingService, LightService, "Команды устройству отопления")
+    Rel(ScenarioProcessingService, DoorService, "Команды устройству отопления")
+    Rel(ScenarioProcessingService, UniversalService, "Команды устройству отопления")
+
+    ' Поддомен TelemetryDomain
+    Rel(WarmTelemetryConnector, TelemetryQueueService, "Телеметрия устройства отопления")
+    Rel(LightTelemetryConnector, TelemetryQueueService, "Телеметрия устройства отопления")
+    Rel(DoorTelemetryConnector, TelemetryQueueService, "Телеметрия устройства отопления")
+    Rel(UniversalTelemetryConnector, TelemetryQueueService, "Телеметрия устройства отопления")
+
+    Rel(TelemetryDashboardService, BackendForFrontend, "Дашборды телеметрии устройств")
+
+
+'}
+
+
+
+
+
+
+
+@enduml
