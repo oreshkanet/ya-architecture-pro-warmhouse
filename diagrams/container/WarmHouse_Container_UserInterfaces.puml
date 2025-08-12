@@ -1,0 +1,70 @@
+@startuml WarmHouse_Container_ToBe
+title WarmHouse Container Diagram (User Interfaces)
+
+top to bottom direction
+
+!include ../c4/C4_Container.puml
+
+skinparam wrapWidth 300
+skinparam linetype polyline
+
+Person_Ext(User, "User", "Пользователь системы")
+Person(Support, "Support", "Специалист поддержки")
+
+System_Boundary(WarmHouseSystem, "WarmHouse System") {
+    Container_Boundary(UserInterfacesDomain, "Интерфейсы системы") {
+        Container(WebApp, "Web Application", "Angular, Node.JS", "Web-интерфейс для работы с системой")
+        Container(MobileApp, "Mobile Application", "Kotlin, Swift", "Мобильное приложение для работы с системой")
+        Container(BackendForFrontend, "Application Backend", "Node.JS", "")
+        Container(UserService, "User Service", "Node.JS", "Регистрация пользователей и управление профилем")
+        Container(AuthService, "Auth Service", "Node.JS", "Аутентификация и авторизация в системе")
+        ContainerDb(UsersDatabase, "Users Database", "PostgreSQL", "Хранение данных о пользователях системы")
+        
+        Rel(WebApp, BackendForFrontend, "", "https")
+        Rel(MobileApp, BackendForFrontend, "", "https")
+        Rel(BackendForFrontend, UserService, "Получение данных профиля пользователей", "https")
+        Rel(BackendForFrontend, AuthService, "Авторизация пользователей", "https")        
+        Rel(UserService, UsersDatabase, "Чтение/запись данных пользователя")
+        Rel(AuthService, UsersDatabase, "Чтение данных пользователя для авторизации")
+    }
+
+    Container_Boundary(DeviceDomain, "Управление устройствами") {
+        Container_Boundary(UserDeviceDomain, "Устройства пользователя") {
+            Container(DeviceManagementService, "Device Management Service", "Go", "Подключение и отключение устройств различных типов, предоставление информации о подключенных устройствах")
+        }
+    }
+
+    Container_Boundary(ScenarioDomain, "Сценарии устройств") {
+        Container_Boundary(ScenarioManagementDomain, "Управление сценариями") {
+            Container(ScenarioService, "Scenario Service", "Go", "Создание, удаление и управление активностью сценария, предоставление информации о сценариях пользователя")
+            Container(ScenarioWorkflowService, "Scenario Workflow Service", "Go", "Настройка workflow выполнения сценария")
+
+            Lay_D(ScenarioService, ScenarioWorkflowService)
+        }
+
+        Container_Boundary(ScenarioProcessingDomain, "Выполнение сценариев") {
+            Container(ScenarioTriggerService, "Scenario Trigger Service", "Go", "Генерация триггеров для запуска сценариев (команды пользователя, телементрия устройств)")
+        }
+
+        Lay_D(ScenarioWorkflowService, ScenarioTriggerService)
+    }
+  
+    Container_Boundary(TelemetryDomain, "Телеметрия устройств") {
+        Container(TelemetryDashboardService, "Telemetry Dashboard Service", "Go", "Предоставление различной информации о телеметрии в различных срезах")
+    }
+
+    Lay_D(DeviceManagementService, TelemetryDashboardService)
+}
+
+' Взаимодействие пользователей с системой
+Rel(User, WebApp, "Подключает и управляет новыми устройствами, Настраивает сценарии, Просматривает телеметрию")
+Rel(User, MobileApp, "Подключает и управляет новыми устройствами, Настраивает сценарии, Просматривает телеметрию")
+Rel(Support, WebApp, "Осуществляет поддержку пользователей")
+
+Rel_R(BackendForFrontend, TelemetryDashboardService, "Дашборды телеметрии устройств")
+Rel_R(BackendForFrontend, DeviceManagementService, "Команды настройки устройств пользователя")
+Rel_R(BackendForFrontend, ScenarioService, "Команды создания/редактирования сценариев устройств")
+Rel_R(BackendForFrontend, ScenarioWorkflowService, "Команды настройки сценариев устройств")
+Rel_R(BackendForFrontend, ScenarioTriggerService, "Команды запуска сценариев устройств")
+
+@enduml
