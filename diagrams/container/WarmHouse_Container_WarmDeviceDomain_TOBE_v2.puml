@@ -1,4 +1,3 @@
-puml
 @startuml WarmHouse_Container_ToBe
 title WarmHouse Container Diagram
 
@@ -6,7 +5,7 @@ top to bottom direction
 
 !include ../c4/C4_Container.puml
 
-System_Ext(WarmDevice, "Warm Device", "Датчик управления отоплением", "Uses HTTP API, Request data format")
+System_Ext(WarmDevice, "Warm Device", "Датчик управления отоплением", "Uses HTTP API, MQTT")
 
 System_Boundary(WarmHouseSystem, "WarmHouse System") {
   Container_Boundary(DeviceDomain, "Управление устройствами") {
@@ -17,21 +16,19 @@ System_Boundary(WarmHouseSystem, "WarmHouse System") {
         Container(WarmService, "Warm Service", "Go", "Приём команды установки значений параметров устройства отопления") 
         ContainerDb(WarmCache, "Warm Cache", "Redis", "Кэширование параметров подключения к устройствам")
 
-        Rel_D(WarmService, WarmCache, "Запись параметров подключения к устройствам")
-        Rel_D(WarmConnector, WarmCache, "Чтение параметров подключения к устройствам")
-        Rel_U(WarmTelemetryConnector, WarmCache, "Чтение параметров подключения к устройствам")
-        Rel_D(WarmService, WarmQueue, "Запись команд на отправку устройствам")
-        Rel_D(WarmQueue, WarmConnector, "Чтение команд на отправку устройствам")
+        Rel_R(WarmService, WarmCache, "Запись параметров подключения к устройствам")
+        Rel_R(WarmConnector, WarmCache, "Чтение параметров подключения к устройствам")
+        Rel_R(WarmTelemetryConnector, WarmCache, "Чтение параметров подключения к устройствам")
+        Rel_R(WarmService, WarmQueue, "Запись команд на отправку устройствам")
+        Rel_R(WarmQueue, WarmConnector, "Чтение команд на отправку устройствам")
 
+        Lay_D(WarmConnector, WarmTelemetryConnector)
     }
   }
 }
 
 ' Взаимодействие с внешними устройствами
-Rel(WarmConnector, WarmDevice, "Отправка команд устройству")
-BiRel(WarmTelemetryConnector, WarmDevice, "Сбор и получение телеметрии устройства")
-'Rel(WarmDevice, WarmTelemetryConnector, "Получение телеметрии от устройства")
-
-
+Rel_R(WarmConnector, WarmDevice, "Отправка команд устройству")
+BiRel_R(WarmTelemetryConnector, WarmDevice, "Сбор и получение телеметрии устройства")
 
 @enduml

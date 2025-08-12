@@ -1,0 +1,57 @@
+@startuml WarmHouse_Container
+
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title WarmHouse Container Diagram
+
+skinparam wrapWidth 300
+skinparam linetype polyline
+
+Person_Ext(User, "Пользователь системы", "Подключает и управляет новыми устройствами, Настраивает сценарии, Просматривает телеметрию")
+Person(Support, "Специалист поддержки", "Осуществляет поддержку пользователей")
+
+System_Ext(Device, "Подключенные устройства", "Устройства управления отоплением, светом, воротами, универсальное устройство", "Uses HTTP API, MQTT")
+
+System_Boundary(WarmHouseSystem, "WarmHouse System") {
+    System(UserInterfacesDomain, "Интерфейсы системы", "Личный кабинет пользователя, интерфейсы службы поддержки ")
+    
+    Container_Boundary(DeviceManagementDomain, "Управление устройствами") {
+        System(UserDeviceDomain, "Устройства пользователя", "Подключение и отключение устройств пользователя различных типов")
+        System(DeviceIntegrationDomain, "Взаимодействие с устройствами", "Организация коммуникации с подключенными устройствами: отправка команд устройствам, сбор телеметрии устройств")
+
+        Rel_U(DeviceIntegrationDomain, UserDeviceDomain, "Получение параметров устройств")
+    }
+
+    Container_Boundary(ScenarioDomain, "Сценарии устройств") {
+        System(ScenarioManagementDomain, "Управление сценариями", "Создание, изменение и настройка сценариев управления устройствами")
+        System(ScenarioProcessingDomain, "Выполнение сценариев", "Обработка триггеров запуска сценариев, выполнение сценариев управления устройствами")
+
+        Rel_R(ScenarioProcessingDomain, ScenarioManagementDomain, "Получение параметров устройств")
+    }
+  
+    System(TelemetryDomain, "Телеметрия устройств", "Обработка потока входящей телеметрии, предоставление отчётов и дашбордов телеметрии")
+} 
+
+' Взаимодействие пользователей с системой
+Rel(User, UserInterfacesDomain, "Личный кабинет пользователя")
+Rel(Support, UserInterfacesDomain, "Интерфейс службы поддержки")
+
+' Взаимодействие с внешними устройствами
+Rel(DeviceIntegrationDomain, Device, "Отправка команд устройству")
+BiRel(DeviceIntegrationDomain, Device, "Получение и сбор телеметрии с устройства")
+
+' Поддомен ScenarioManagementDomain
+Rel(ScenarioProcessingDomain, UserDeviceDomain, "Получение параметров устройств")
+
+' Поддомен ScenarioProcessingDomain
+Rel_R(DeviceIntegrationDomain, ScenarioProcessingDomain, "Телеметрия подключенных устройств")
+Rel_L(ScenarioProcessingDomain, DeviceIntegrationDomain, "Команды подключенным устройствам")
+
+' Поддомен TelemetryDomain
+Rel_L(DeviceIntegrationDomain, TelemetryDomain, "Телеметрия подключенных устройств")
+
+Rel(UserInterfacesDomain, TelemetryDomain, "Запросы построения отчётов и дашбордов телеметрии устройств")
+Rel(UserInterfacesDomain, ScenarioManagementDomain, "Команды настройки сценариев устройств")
+Rel(UserInterfacesDomain, UserDeviceDomain, "Команды настройки устройств пользователя")
+
+@enduml

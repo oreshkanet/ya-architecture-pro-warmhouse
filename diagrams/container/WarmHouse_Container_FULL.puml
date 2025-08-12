@@ -3,47 +3,49 @@ title WarmHouse Container Diagram
 
 top to bottom direction
 
-'!include ../c4/C4_Container.puml
-!includeurl https://raw.githubusercontent.com/RicardoNiepel/C4-PlantUML/master/C4_Component.puml
+!include ../c4/C4_Container.puml
+
+skinparam wrapWidth 300
+' skinparam linetype ortho
+skinparam linetype polyline
+
+LAYOUT_LANDSCAPE()
 
 'System(WarmHouseSystem, "WarmHouse System", "Система управления тёплым домом")
 
 Person_Ext(User, "User", "Пользователь системы")
 Person(Support, "Support", "Специалист поддержки")
 
-    System_Ext(WarmDevice, "Warm Device", "Датчик управления отоплением", "Uses HTTP API, Request data format")
-    System_Ext(LightDevice, "Light Device", "Датчик управления светом", "Uses HTTP API, Request data format")
-    System_Ext(DoorDevice, "Door Device", "Датчик управления воротами", "Uses HTTP API, Request data format")
-    System_Ext(UniversalDevice, "Universal Device", "Универсальный датчик управления", "Uses HTTP API, Request data format")
-
-
+System_Boundary(DeviceSystem, "Device System") {
+    System_Ext(WarmDevice, "Warm Device", "Датчик управления отоплением", "Uses HTTP API, MQTT")
+    System_Ext(LightDevice, "Light Device", "Датчик управления светом", "Uses HTTP API, MQTT")
+    System_Ext(DoorDevice, "Door Device", "Датчик управления воротами", "Uses HTTP API, MQTT")
+    System_Ext(UniversalDevice, "Universal Device", "Универсальный датчик управления", "Uses HTTP API, MQTT")
+}
 
 System_Boundary(WarmHouseSystem, "WarmHouse System") {
     Container_Boundary(UserDomain, "Личный кабинет") {
         Container(WebApp, "Web Application", "Java, Spring", "Web-интерфейс для работы с системой")
         Container(MobileApp, "Mobile Application", "Kotlin, Swift", "Мобильное приложение для работы с системой")
         Container(BackendForFrontend, "Application Backend", "Node.JS", "")
+        Container(UserService, "User Service", "Node.JS", "Регистрация пользователей и управление профилем")
+        Container(AuthService, "Auth Service", "Node.JS", "Аутентификация и авторизация в системе")
+        ContainerDb(UsersDatabase, "Users Database", "PostgreSQL", "Хранение данных о пользователях системы")
+        
         Rel(WebApp, BackendForFrontend, "", "https")
         Rel(MobileApp, BackendForFrontend, "", "https")
-
-        Container(UserService, "User Service", "Node.JS", "Регистрация пользователей и управление профилем")
         Rel(BackendForFrontend, UserService, "Получение данных профиля пользователей", "https")
-
-        Container(AuthService, "Auth Service", "Node.JS", "Аутентификация и авторизация в системе")
-        Rel(BackendForFrontend, AuthService, "Авторизация пользователей", "https")
-
-        ContainerDb(UsersDatabase, "Users Database", "PostgreSQL", "Хранение данных о пользователях системы")
-        Rel(UserService, UsersDatabase, "Чтение/запись данных пользователя")
-        Rel(AuthService, UsersDatabase, "Чтение данных пользователя для авторизации")
+        Rel(BackendForFrontend, AuthService, "Авторизация пользователей", "https")        
+        Rel_R(UserService, UsersDatabase, "Чтение/запись данных пользователя")
+        Rel_L(AuthService, UsersDatabase, "Чтение данных пользователя для авторизации")
     }
 
     Container_Boundary(DeviceDomain, "Управление устройствами") {
         Container_Boundary(UserDeviceDomain, "Управление устройствами пользователя") {
             Container(DeviceManagementService, "Device Management Service", "Go", "Подключение и отключение устройств различных типов, предоставление информации о подключенных устройствах")
-            
             ContainerDb(DeviceDatabase, "Device Database", "PostgreSQL", "Хранение данных о подключенных устройствах пользователей")
 
-            Rel(DeviceManagementService, DeviceDatabase, "Чтение/запись данных устройств")
+            Rel_R(DeviceManagementService, DeviceDatabase, "Чтение/запись данных устройств")
         }
     
         Container_Boundary(WarmDeviceDomain, "Управление отоплением") {
@@ -53,14 +55,12 @@ System_Boundary(WarmHouseSystem, "WarmHouse System") {
             Container(WarmConnector, "Warm Connector", "Go", "Передача командды установки параметров отопления устройству")
             ContainerDb(WarmCache, "Warm Cache", "Redis", "Кэширование параметров подключения к устройствам")
             
-            Rel(WarmService, WarmCache, "Запись параметров подключения к устройствам")
-            Rel(WarmConnector, WarmCache, "Чтение параметров подключения к устройствам")
-            Rel(WarmTelemetryConnector, WarmCache, "Чтение параметров подключения к устройствам")
-            Rel(WarmQueue, WarmConnector, "Чтение команд на отправку устройствам")
-            Rel(WarmService, WarmQueue, "Запись команд на отправку устройствам")
-            
+            Rel_R(WarmService, WarmCache, "Запись параметров подключения к устройствам")
+            Rel_L(WarmConnector, WarmCache, "Чтение параметров подключения к устройствам")
+            Rel_L(WarmTelemetryConnector, WarmCache, "Чтение параметров подключения к устройствам")
+            Rel_R(WarmService, WarmQueue, "Запись команд на отправку устройствам")
+            Rel_R(WarmQueue, WarmConnector, "Чтение команд на отправку устройствам")       
         }
-
        
         Container_Boundary(LightDeviceDomain, "Управление светом") {
             Container(LightService, "Light Service", "Go", "Приём команды установки значений параметров устройства отопления") 
@@ -69,14 +69,12 @@ System_Boundary(WarmHouseSystem, "WarmHouse System") {
             ContainerQueue(LightQueue, "Light Queue", "RabbitMQ", "Организация асинхронной доставки команд устройству")
             ContainerDb(LightCache, "Light Cache", "Redis", "Кэширование параметров подключения к устройствам")
 
-            Rel(LightService, LightCache, "Запись параметров подключения к устройствам")
-            Rel(LightConnector, LightCache, "Чтение параметров подключения к устройствам")
-            Rel(LightTelemetryConnector, LightCache, "Чтение параметров подключения к устройствам")
-            Rel(LightService, LightQueue, "Запись команд на отправку устройствам")
-            Rel(LightQueue, LightConnector, "Чтение команд на отправку устройствам")
+            Rel_R(LightService, LightCache, "Запись параметров подключения к устройствам")
+            Rel_L(LightConnector, LightCache, "Чтение параметров подключения к устройствам")
+            Rel_L(LightTelemetryConnector, LightCache, "Чтение параметров подключения к устройствам")
+            Rel_R(LightService, LightQueue, "Запись команд на отправку устройствам")
+            Rel_R(LightQueue, LightConnector, "Чтение команд на отправку устройствам")
         }
-
-        
 
         Container_Boundary(DoorDeviceDomain, "Управление воротами") {
             Container(DoorService, "Door Service", "Go", "Приём команды установки значений параметров устройства отопления") 
@@ -85,14 +83,12 @@ System_Boundary(WarmHouseSystem, "WarmHouse System") {
             ContainerQueue(DoorQueue, "Door Queue", "RabbitMQ", "Организация асинхронной доставки команд устройству")
             ContainerDb(DoorCache, "Door Cache", "Redis", "Кэширование параметров подключения к устройствам")
 
-            Rel(DoorService, DoorCache, "Запись параметров подключения к устройствам")
-            Rel(DoorConnector, DoorCache, "Чтение параметров подключения к устройствам")
-            Rel(DoorTelemetryConnector, DoorCache, "Чтение параметров подключения к устройствам")
-            Rel(DoorService, DoorQueue, "Запись команд на отправку устройствам")
-            Rel(DoorQueue, DoorConnector, "Чтение команд на отправку устройствам")
+            Rel_R(DoorService, DoorCache, "Запись параметров подключения к устройствам")
+            Rel_L(DoorConnector, DoorCache, "Чтение параметров подключения к устройствам")
+            Rel_L(DoorTelemetryConnector, DoorCache, "Чтение параметров подключения к устройствам")
+            Rel_R(DoorService, DoorQueue, "Запись команд на отправку устройствам")
+            Rel_R(DoorQueue, DoorConnector, "Чтение команд на отправку устройствам")
         }
-
-        
 
         Container_Boundary(UniversalDeviceDomain, "Управление универсальными устройствами") {
             Container(UniversalService, "Universal Service", "Go", "Приём команды установки значений параметров устройства отопления") 
@@ -101,15 +97,12 @@ System_Boundary(WarmHouseSystem, "WarmHouse System") {
             ContainerQueue(UniversalQueue, "Universal Queue", "RabbitMQ", "Организация асинхронной доставки команд устройству")
             ContainerDb(UniversalCache, "Universal Cache", "Redis", "Кэширование параметров подключения к устройствам")
 
-            Rel(UniversalService, UniversalCache, "Запись параметров подключения к устройствам")
-            Rel(UniversalConnector, UniversalCache, "Чтение параметров подключения к устройствам")
-            Rel(UniversalTelemetryConnector, UniversalCache, "Чтение параметров подключения к устройствам")
-            Rel(UniversalService, UniversalQueue, "Запись команд на отправку устройствам")
-            Rel(UniversalQueue, UniversalConnector, "Чтение команд на отправку устройствам")
+            Rel_R(UniversalService, UniversalCache, "Запись параметров подключения к устройствам")
+            Rel_L(UniversalConnector, UniversalCache, "Чтение параметров подключения к устройствам")
+            Rel_L(UniversalTelemetryConnector, UniversalCache, "Чтение параметров подключения к устройствам")
+            Rel_R(UniversalService, UniversalQueue, "Запись команд на отправку устройствам")
+            Rel_R(UniversalQueue, UniversalConnector, "Чтение команд на отправку устройствам")
         }
-
-        
-
     }
 
     Container_Boundary(ScenarioDomain, "Сценарии устройств") {
@@ -149,8 +142,7 @@ System_Boundary(WarmHouseSystem, "WarmHouse System") {
 
 }
 
-    Lay_D(WarmDeviceDomain, LightDeviceDomain)
-    Lay_D(LightDeviceDomain, DoorDeviceDomain)
+    
 
     ' Взаимодействие пользователей с системой
     Rel(User, WebApp, "Подключает и управляет новыми устройствами, Настраивает сценарии, Просматривает телеметрию")

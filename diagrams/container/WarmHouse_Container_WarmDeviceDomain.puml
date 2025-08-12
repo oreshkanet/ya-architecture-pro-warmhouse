@@ -1,6 +1,5 @@
-puml
-@startuml WarmHouse_Container_ToBe
-title WarmHouse Container Diagram
+@startuml WarmHouse_Container_WarmDeviceDomain
+title WarmHouse Container Diagram (Warm Device Domain)
 
 top to bottom direction
 

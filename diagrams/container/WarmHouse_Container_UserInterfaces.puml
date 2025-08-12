@@ -1,5 +1,5 @@
 @startuml WarmHouse_Container_ToBe
-title WarmHouse Container Diagram (User Interfaces)
+title WarmHouse Container Diagram (Users Interfaces)
 
 top to bottom direction
 
@@ -12,7 +12,7 @@ Person_Ext(User, "User", "Пользователь системы")
 Person(Support, "Support", "Специалист поддержки")
 
 System_Boundary(WarmHouseSystem, "WarmHouse System") {
-    Container_Boundary(UserInterfacesDomain, "Интерфейсы системы") {
+    Container_Boundary(UsersInterfacesDomain, "Интерфейсы системы") {
         Container(WebApp, "Web Application", "Angular, Node.JS", "Web-интерфейс для работы с системой")
         Container(MobileApp, "Mobile Application", "Kotlin, Swift", "Мобильное приложение для работы с системой")
         Container(BackendForFrontend, "Application Backend", "Node.JS", "")

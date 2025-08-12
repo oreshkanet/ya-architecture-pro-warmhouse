@@ -1,0 +1,88 @@
+@startuml WarmHouse_Container_ToBe
+title WarmHouse Container Diagram (Device Domain)
+
+top to bottom direction
+
+!include ../c4/C4_Container.puml
+
+skinparam wrapWidth 300
+skinparam linetype polyline
+
+
+Boundary(Devices, "Devices") {
+    System_Ext(WarmDevice, "Warm Device", "Датчик управления отоплением", "Uses HTTP API, MQTT")
+    System_Ext(LightDevice, "Light Device", "Датчик управления светом", "Uses HTTP API, MQTT")
+    System_Ext(DoorDevice, "Door Device", "Датчик управления воротами", "Uses HTTP API, MQTT")
+    System_Ext(UniversalDevice, "Universal Device", "Универсальный датчик управления", "Uses HTTP API, MQTT")
+
+    Lay_D(WarmDevice, LightDevice)
+    Lay_D(LightDevice, DoorDevice)
+    Lay_D(DoorDevice, UniversalDevice)
+}
+
+System_Boundary(WarmHouseSystem, "WarmHouse System") {
+    Container_Boundary(UserInterfacesDomain, "Интерфейсы системы") {
+        Container(BackendForFrontend, "Application Backend", "Node.JS", "")
+    }
+
+    Container_Boundary(DeviceDomain, "Управление устройствами") {
+        Container_Boundary(UserDeviceDomain, "Устройства пользователя") {
+            Container(DeviceManagementService, "Device Management Service", "Go", "Подключение и отключение устройств различных типов, предоставление информации о подключенных устройствах")
+            ContainerDb(DeviceDatabase, "Device Database", "PostgreSQL", "Хранение данных о подключенных устройствах пользователей")
+
+            Rel(DeviceManagementService, DeviceDatabase, "Чтение/запись данных устройств")
+        }
+    
+        Container_Boundary(DeviceIntegrationDomain, "Управление отоплением") {
+            Container(DeviceAPIService, "Device API Service", "Go", "Приём команды установки значений параметров устройства отопления") 
+            ContainerQueue(DeviceQueue, "Device Queue", "RabbitMQ", "Организация асинхронной доставки команд устройству")
+            ContainerDb(DeviceCache, "Device Cache", "Redis", "Кэширование параметров подключения к устройствам")
+            Container(DeviceConnector, "Device Connector", "Go", "Передача устройству команд включения/выключения и установки параметров")
+            Container(DeviceTelemetryConnector, "Warm Telemetry Connector", "Go", "Сбор и получение телеметрии подключенных устройств")      
+            
+            Rel(DeviceAPIService, DeviceCache, "Запись параметров подключения к устройствам")
+            Rel(DeviceAPIService, DeviceQueue, "Запись команд на отправку устройствам")
+            Rel_U(DeviceConnector, DeviceCache, "Чтение параметров подключения к устройствам")
+            Rel(DeviceTelemetryConnector, DeviceCache, "Чтение параметров подключения к устройствам")
+            Rel(DeviceQueue, DeviceConnector, "Чтение команд на отправку устройствам") 
+        }
+    }
+
+    Container_Boundary(ScenarioDomain, "Сценарии устройств") {
+        Container_Boundary(ScenarioManagementDomain, "Управление сценариями") {
+            Container(ScenarioWorkflowService, "Scenario Workflow Service", "Go", "Настройка workflow выполнения сценария")
+        }
+
+        Container_Boundary(ScenarioProcessingDomain, "Выполнение сценариев") {
+            Container(ScenarioProcessingService, "Scenario Processing Service", "Go", "Выполнение workflow сценария") 
+            ContainerQueue(ScenarioQueueService, "Scenario Queue", "RabbitMQ", "Асинхронное получение потока телеметрии для запуска триггеров по условию") 
+        }
+    }
+  
+    Container_Boundary(TelemetryDomain, "Телеметрия устройств") {
+        ContainerQueue(TelemetryQueueService, "Telemetry Queue", "RabbitMQ", "Доставка показателей телеметрии")
+    }
+}
+
+' Взаимодействие с внешними устройствами
+Rel(DeviceConnector, Devices, "Отправка команд устройству")
+Rel(DeviceTelemetryConnector, Devices, "Сбор телеметрии с устройства")
+Rel(Devices, DeviceTelemetryConnector, "Получение телеметрии от устройства")
+
+' Поддомен Device
+Rel(DeviceAPIService, DeviceManagementService, "Получение параметров устройств")
+
+' Поддомен ScenarioManagementDomain
+Rel(ScenarioWorkflowService, DeviceManagementService, "Получение параметров устройств")
+
+' Поддомен ScenarioProcessingDomain
+Rel(DeviceTelemetryConnector, ScenarioQueueService, "Телеметрия устройства отопления")
+Rel(ScenarioProcessingService, DeviceAPIService, "Команды устройству отопления")
+
+' Поддомен TelemetryDomain
+Rel(DeviceTelemetryConnector, TelemetryQueueService, "Телеметрия устройства отопления")
+
+' Поддомен UserInterfacesDomain
+Rel(BackendForFrontend, DeviceManagementService, "Команды настройки устройств пользователя")
+
+@enduml
