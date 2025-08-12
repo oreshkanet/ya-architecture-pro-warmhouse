@@ -1,5 +1,5 @@
-@startuml WarmHouse_Container_ToBe
-title WarmHouse Container Diagram (Users Interfaces)
+@startuml WarmHouse_Container_UserInterfacesDomain
+title WarmHouse Container Diagram (User Interfaces Domain)
 
 top to bottom direction
 

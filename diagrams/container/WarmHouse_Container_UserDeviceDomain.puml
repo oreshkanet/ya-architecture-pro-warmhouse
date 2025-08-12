@@ -1,4 +1,4 @@
-@startuml WarmHouse_Container_ToBe
+@startuml WarmHouse_Container_UserDeviceDomain
 title WarmHouse Container Diagram (User Device Domain)
 
 top to bottom direction

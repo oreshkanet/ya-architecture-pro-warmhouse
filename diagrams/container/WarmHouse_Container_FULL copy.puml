@@ -50,10 +50,10 @@ System_Boundary(WarmHouseSystem, "WarmHouse System") {
     
         Container_Boundary(DeviceIntegrationDomain, "Взаимодействие с устройствами") {
             Container(DeviceAPIService, "Device API Service", "Go", "Приём команды установки значений параметров устройства отопления") 
-            ContainerQueue(DeviceQueue, "Warm Queue", "RabbitMQ", "Организация асинхронной доставки команд устройству")
-            ContainerDb(DeviceCache, "Warm Cache", "Redis", "Кэширование параметров подключения к устройствам")
-            Container(DeviceConnector, "Warm Connector", "Go", "Передача устройству команд включения/выключения и установки параметров")
-            Container(DeviceTelemetryConnector, "Warm Telemetry Connector", "Go", "Сбор и получение телеметрии подключенных устройств") 
+            ContainerQueue(DeviceQueue, "Device Queue", "RabbitMQ", "Организация асинхронной доставки команд устройству")
+            ContainerDb(DeviceCache, "Device Cache", "Redis", "Кэширование параметров подключения к устройствам")
+            Container(DeviceConnector, "Device Connector", "Go", "Передача устройству команд включения/выключения и установки параметров")
+            Container(DeviceTelemetryConnector, "Device Telemetry Connector", "Go", "Сбор и получение телеметрии подключенных устройств") 
             
             Rel(DeviceAPIService, DeviceCache, "Запись параметров подключения к устройствам")
             Rel(DeviceAPIService, DeviceQueue, "Запись команд на отправку устройствам")
