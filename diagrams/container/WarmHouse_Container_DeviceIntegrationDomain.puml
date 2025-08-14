@@ -23,7 +23,7 @@ System_Boundary(WarmHouseSystem, "WarmHouse System") {
             Container(DeviceManagementService, "Device Management Service", "Go", "Подключение и отключение устройств различных типов, предоставление информации о подключенных устройствах")
         }
     
-        Container_Boundary(DeviceIntegrationDomain, "Управление отоплением") {
+        Container_Boundary(DeviceIntegrationDomain, "Взаимодействие с устройствами") {
             Container(DeviceAPIService, "Device API Service", "Go", "Приём команд включения/выключения и установки значений параметров устройств") 
             ContainerQueue(DeviceQueue, "Device Queue", "RabbitMQ", "Организация асинхронной доставки команд устройству")
             ContainerDb(DeviceCache, "Device Cache", "Redis", "Кэширование параметров подключения к устройствам")
