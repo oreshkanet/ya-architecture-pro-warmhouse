@@ -9,7 +9,7 @@ skinparam wrapWidth 300
 skinparam linetype polyline
 
 System_Boundary(WarmHouseSystem, "WarmHouse System") {
-    Container_Boundary(UserInterfacesDomain, "Интерфейсы системы") {
+    Container_Boundary(UserInterfacesDomain, "Пользовательские интерфейсы") {
         Container(BackendForFrontend, "Application Backend", "Node.JS", "")
     }
 
@@ -22,7 +22,7 @@ System_Boundary(WarmHouseSystem, "WarmHouse System") {
         }
     
         Container_Boundary(DeviceIntegrationDomain, "Взаимодействие с устройствами") {
-            Container(DeviceAPIService, "Device API Service", "Go", "Приём команды установки значений параметров устройства отопления") 
+            Container(DeviceAPIService, "Device API Service", "Go", "Приём команд включения/выключения и установки значений параметров устройств") 
         }
     }
 

@@ -13,7 +13,7 @@ Person(Support, "Специалист поддержки", "Осуществля
 System_Ext(Device, "Подключенные устройства", "Устройства управления отоплением, светом, воротами, универсальное устройство", "Uses HTTP API, MQTT")
 
 System_Boundary(WarmHouseSystem, "WarmHouse System") {
-    System(UserInterfacesDomain, "Интерфейсы системы", "Личный кабинет пользователя, интерфейсы службы поддержки ")
+    System(UserInterfacesDomain, "Пользовательские интерфейсы", "Личный кабинет пользователя, интерфейсы службы поддержки ")
     
     Container_Boundary(DeviceManagementDomain, "Управление устройствами") {
         System(UserDeviceDomain, "Устройства пользователя", "Подключение и отключение устройств пользователя различных типов")
