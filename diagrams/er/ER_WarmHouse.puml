@@ -1,0 +1,53 @@
+@startuml ER_WarmHouse
+title WarmHouse ER-Diagram
+
+' ||--|| → One-to-One
+' ||--o{ → One-to-Many
+' }|--|{ → Many-to-Many
+
+entity User {
+  +user_id: INT <>
+  +user_name: VARCHAR
+}
+
+entity House {
+  +house_id: INT <>
+  +house_name VARCAHR
+  +user_id: INT <>
+}
+
+entity Device {
+  +device_id: INT <>
+  +house_id: INT <>
+  +device_name: VARCHAR
+  +device_type: DeviceType <>
+}
+
+entity DeviceType {
+  +type_id: INT <>
+  +type_name: VARCHAR
+}
+
+entity DeviceController {
+  +controller_id: INT <>
+  +device_id: INT <>
+  +active: BOOL
+  +controller_name: VARCHAR
+  +controller_url: VARCHAR
+}
+
+entity DeviceSensor {
+  +sensor_id: INT <>
+  +device_id: INT <>
+  +active: BOOL
+  +sensor_name: VARCHAR
+  +sensor_url: VARCHAR
+}
+
+User ||--o{ House : "управляет домами"
+DeviceType ||--o{ Device : "содержит типы"
+House ||--o{ Device : "устройства в доме"
+Device ||--o{ DeviceController : "контроллеры устройства"
+Device ||--o{ DeviceSensor : "датчики устройства"
+
+@enduml
