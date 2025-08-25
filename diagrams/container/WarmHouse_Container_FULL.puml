@@ -53,7 +53,8 @@ System_Boundary(WarmHouseSystem, "WarmHouse System") {
             ContainerDb(DeviceCache, "Device Cache", "Redis", "Кэширование параметров подключения к устройствам")
             Container(DeviceConnector, "Device Connector", "Go", "Передача устройству команд включения/выключения и установки параметров")
             Container(DeviceTelemetryConnector, "Device Telemetry Connector", "Go", "Сбор и получение телеметрии подключенных устройств") 
-            
+            ContainerQueue(TelemetryExchange, "Telemetry Exchange", "RabbitMQ", "Роутинг телеметрии устройств между очередями телеметрии")
+
             Rel(DeviceAPIService, DeviceCache, "Запись параметров подключения к устройствам")
             Rel(DeviceAPIService, DeviceQueue, "Запись команд на отправку устройствам")
             Rel(DeviceConnector, DeviceCache, "Чтение параметров подключения к устройствам")
