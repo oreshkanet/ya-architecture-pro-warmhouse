@@ -1,0 +1,27 @@
+@startuml Code_DeviceTelemetryConnector
+title WarmHouse: Device Telemetry Connector Code Diagram
+
+top to bottom direction
+
+!includeurl ../c4/C4_Component.puml
+
+class Device {
+  +Int id
+  +String name
+  +List<Sensor> sensors
+  
+  +void addSensor()
+  +void removeSensor()
+}
+
+class Sensor {
+  +Int id
+  +String name
+  +String url
+  
+  +void getTelemetry()
+}
+
+Device "1" -- "0..*" Sensor : has
+
+@enduml

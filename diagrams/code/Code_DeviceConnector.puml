@@ -1,0 +1,60 @@
+@startuml Code_DeviceConnector
+title WarmHouse: Device Connector Code Diagram
+
+top to bottom direction
+
+!includeurl ../c4/C4_Component.puml
+
+class Device {
+  +Int id
+  +String name
+  +Type DeviceType
+  
+  +void register()
+  +void unregister()
+}
+
+class DeviceType {
+  +Number id
+  +String name
+}
+
+class WarmDevice {
+  +Int id
+  +String url
+
+  +void setTemperature(float t)
+}
+
+class LightDevice {
+  +Int id
+  +String url
+
+  +void on()
+  +void off()
+  +void setBrightness(int t)
+}
+
+class DoorDevice {
+  +Int id
+  +String url
+
+  +void open()
+  +void close()
+}
+
+class UniversalDevice {
+  +Int id
+  +String url
+
+  +void on()
+  +void off()
+}
+
+DeviceType "1" -- "0..*" Device : has
+Device "1" -- "0..1" WarmDevice
+Device "1" -- "0..1" LightDevice
+Device "1" -- "0..1" DoorDevice
+Device "1" -- "0..1" UniversalDevice
+
+@enduml
