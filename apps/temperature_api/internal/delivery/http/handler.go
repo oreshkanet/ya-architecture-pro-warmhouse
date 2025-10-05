@@ -21,6 +21,7 @@ func NewHandler() *Handler {
 func (h *Handler) InitRoutes(srv *gin.Engine) {
 	srv.GET("health", h.ManageHealth)
 	srv.GET("temperature", h.GetTemperature)
+	srv.GET("temperature/:sensorId", h.GetTemperature)
 }
 
 func (h *Handler) ManageHealth(c *gin.Context) {
@@ -29,8 +30,14 @@ func (h *Handler) ManageHealth(c *gin.Context) {
 
 func (h *Handler) GetTemperature(c *gin.Context) {
 
-	location := c.Query("location")
-	sensorId := c.Query("sensorId")
+	var location, sensorId string
+
+	sensorId = c.Param("sensorId")
+
+	if sensorId == "" {
+		location = c.Query("location")
+		sensorId = c.Query("sensorId")
+	}
 
 	// If no location is provided, use a default based on sensor ID
 	if location == "" {
