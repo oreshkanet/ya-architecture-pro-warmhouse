@@ -1,0 +1,195 @@
+@startuml Class_DeviceService
+title SmartHome: Device Service — Class Diagram
+'allow_mixing
+
+skinparam class {
+    BorderColor #333366
+    ArrowColor #006699
+    AttributeIconVisibility hidden
+}
+
+skinparam databaseBackgroundColor #f0f8ff
+skinparam cloudBackgroundColor #ffe4b5
+
+package "deviceservice" {
+  package "model" {
+    class Device {
+      +String id
+      +String name
+      +String type (multi-sensor, gateway, standalone)
+      +String location
+      +String userId
+      +Boolean isOnline
+      +Long registeredAt
+      +Long lastSeen
+      ..
+      +String toString()
+    }
+
+    class Sensor {
+      +String id
+      +String deviceId
+      +String type (temperature, light, door, camera, universal)
+      +String unit (°C, %, boolean)
+      +Boolean isActuator (can receive commands)
+      +String linkedService (warmservice, lightservice, etc.)
+      ..
+      +String getFullPath()  // device/sensor
+    }
+
+    class Location {
+      +String id
+      +String name (Гостиная, Кухня, Улица)
+      +String type (room, outdoor, floor)
+      +String userId
+      ..
+      +String getPath()
+    }
+  }
+
+  package "delivery" {
+    class DeviceHandler {
+      -DeviceUseCase useCase
+      ..
+      +registerDevice(Request req)
+      +unregisterDevice(String deviceId)
+      +getDeviceStatus(String deviceId)
+      +getAllDevicesByUser(String userId)
+      +updateDeviceLocation(Request req)
+    }
+  }
+
+  package "service" {
+    class DeviceUseCase {
+      -DeviceRepository repository
+      -LocationRepository locationRepo
+      -CommandRouter commandRouter
+      -ExternalStatusClient externalClient
+      ..
+      +RegisterDevice(device: Device, sensors: List<Sensor>): (Device, Error)
+      +UnregisterDevice(id: String, userId: String): Error
+      +GetDeviceStatus(id: String): (CompositeStatus, Error)
+      +UpdateDeviceLocation(id: String, locationId: String): Error
+      +ListDevicesByUser(userId: String): List<Device>
+      +HandleIncomingCommand(command: AutomationCommand): Error
+      -validateOwnership(deviceId: String, userId: String): Boolean
+    }
+
+    class HealthChecker {
+      -Scheduler scheduler
+      -ExternalStatusClient client
+      -DeviceRepository deviceRepo
+      ..
+      +StartPeriodicCheck(interval: Duration)
+      -checkDevice(device: Device)
+      -updateDeviceStatus(device: Device, status: String)
+    }
+
+    class AutomationCommand {
+      +String commandId
+      +String deviceId
+      +String sensorId (optional)
+      +String action (turnOn, setTemp, openDoor)
+      +Map<String, Object> parameters
+      +String triggeredBy (rule ID)
+      +Long timestamp
+    }
+
+    class CompositeStatus {
+      +String deviceId
+      +String deviceName
+      +String location
+      +Boolean isOnline
+      +List<SensorStatus> sensors
+      +Long updatedAt
+    }
+
+    class SensorStatus {
+      +String sensorId
+      +String type
+      +Object currentValue
+      +String status (ok, error, timeout)
+      +Long lastUpdated
+    }
+  }
+
+  package "repository" {
+    interface DeviceRepositoryInterface {
+      +Save(device: Device): Error
+      +FindById(id: String): (Device, Error)
+      +FindByUserId(userId: String): List<Device>
+      +Update(device: Device): Error
+      +Delete(id: String): Error
+    }
+
+    interface LocationRepositoryInterface {
+      +Save(location: Location): Error
+      +FindByUserId(userId: String): List<Location>
+      +FindById(id: String): (Location, Error)
+      +Delete(id: String): Error
+    }
+
+    class DeviceRepository {
+      -DBConnection db
+      ..
+      +Save(device: Device): Error
+      +FindById(id: String): (Device, Error)
+      +FindByUserId(userId: String): List<Device>
+      +Update(device: Device): Error
+      +Delete(id: String): Error
+    }
+
+    class LocationRepository {
+      -DBConnection db
+      ..
+      +Save(location: Location): Error
+      +FindByUserId(userId: String): List<Location>
+      +FindById(id: String): (Location, Error)
+      +Delete(id: String): Error
+    }
+  }
+
+  package "connector" {
+    class SensorConnector {
+      -Map<String, String> sensorToServiceMap
+      -HTTPClient httpClient
+      ..
+      +RouteCommand(sensor: Sensor, action: String, params: Map): (Response, Error)
+      +getServiceEndpoint(sensorType: String): String
+      +GetStatusFromService(service: String, deviceId: String): (StatusResponse, Error)
+      +BulkCheck(services: List<String>, deviceIds: List<String>): Map<String, StatusResponse>
+    }    
+  }
+}
+
+' Связи между классами
+DeviceHandler --> DeviceUseCase : uses
+
+DeviceUseCase --> DeviceRepositoryInterface : работает с устройствами
+DeviceUseCase --> LocationRepositoryInterface : управляет локациями
+DeviceUseCase --> SensorConnector : маршрутизация команд, опрос статуса
+
+SensorConnector --> warm_service : POST
+SensorConnector --> light_service : POST
+SensorConnector --> door_service : POST
+SensorConnector --> video_service : POST
+SensorConnector --> universal_service : POST
+
+DeviceRepository --> db : JDBC/SQL
+LocationRepository --> db : JDBC/SQL
+
+HealthChecker --> DeviceRepository : загружает устройства, обновляет isOnline
+HealthChecker --> SensorConnector : проверяет статус
+
+automation_service --> DeviceHandler : получает команды
+user_service --> DeviceHandler : JWT, user context
+api_gateway --> DeviceHandler : проксирует запросы
+
+legend right
+  <b>Модель данных:</b>
+  • Device содержит один или несколько Sensor
+  • Sensor указывает, какой сервис его обрабатывает
+  • Команды от AutomationService маршрутизируются
+end legend
+
+@enduml
