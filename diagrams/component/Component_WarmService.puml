@@ -1,0 +1,43 @@
+@startuml Component_WarmService
+title SmartHome: Warm Service Component Diagram
+
+!includeurl ../c4/C4_Component.puml
+
+System_Ext(WarmSensor, "Warm Sensor", "Модуль управления отоплением", "Протоколы: HTTP API, MQTT")
+
+Container_Boundary(DeviceDomain, "Управление устройствами пользователей") {
+  Container(DeviceService, "Device Service", "Go", "Централизованное управление:\n - Добавление/удаление устройств\n - Привязка к пользователю и локации\n - Отображение статуса")
+}
+
+Container_Boundary(TelemetryDomain, "Сбор и анализ телеметрии") {
+  ContainerQueue(TelemetryQueue, "Telemetry Queue", "RabbitMQ", "Буферизация и доставка показателей телеметрии")
+}
+
+Container_Boundary(WarmSensorDomain, "Управление отоплением") {
+    Container(SmartHomeMonolith, "SmartHome Monolith", "Go", "Монолитное решение управления отоплением")
+    ContainerDb(WarmDatabase, "Warm Database", "PostgreSQL", "Хранение параметров отопительных устройств и состояния подключения")
+
+  Container(WarmService, "Warm Service", "Go") {
+    Component(HttpDeliveryLayer, "HTTP Service Layer", "Реализация HTTP-сервера для получения и обработки команд")
+    Component(RepositoryLayer, "Repository Layer", "Слой работы с базой данных")
+    Component(ServiceLayer, "Service Layer", "Логика обработки команд:\n - обработка команд управления модулями\n - обработка потока телеметрии")
+    Component(SmartHomeMonolithConnector, "SmartHome Monolith Connector", "Коннектор подключения к монолиту SmartHome")
+    Component(SensorConnector, "Sensor Connector", "Коннектор подключения к модулям:\n - отправка команд\n - получение телеметрии")
+    ComponentQueue(WarmTelemetryQueue, "Warm Telemetry Queue", "Очередь накопления и отправки телеметрии")
+
+    Rel(HttpDeliveryLayer, ServiceLayer, "Передача на обработку запросов")
+    Rel(ServiceLayer, RepositoryLayer, "Чтение/запись сущностей")
+    Rel(ServiceLayer, SmartHomeMonolithConnector, "Команды к модулям, подключенных к монолиту")
+    Rel(ServiceLayer, WarmTelemetryQueue, "Добавление телеметрии в очередь")
+    Rel(ServiceLayer, SensorConnector, "Команды к подключённым модулям")
+  }
+}
+
+Rel(DeviceService, HttpDeliveryLayer, "- Запросы на добавление/удаление модулей\n- Команды управления модулями", "HTTP")
+Rel(RepositoryLayer, WarmDatabase, "Чтение/Запись данных модулей", "SQL")
+Rel(SmartHomeMonolithConnector, SmartHomeMonolith, "Управление модулями, подключенными к монолитному решению", "HTTP")
+Rel(WarmTelemetryQueue, TelemetryQueue, "Отправка данных телеметрии", "AMQP")
+
+Rel(SensorConnector, WarmSensor, "- Отправка команд модулю\n- Получение телеметрии")
+
+@enduml

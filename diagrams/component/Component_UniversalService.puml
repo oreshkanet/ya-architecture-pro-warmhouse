@@ -1,0 +1,39 @@
+@startuml Component_UniversalService
+title SmartHome: Universal Service Component Diagram
+
+!includeurl ../c4/C4_Component.puml
+
+System_Ext(UniversalSensor, "Universal Sensor", "Модуль управления светом", "Протоколы: HTTP API, MQTT")
+
+Container_Boundary(DeviceDomain, "Управление устройствами пользователей") {
+  Container(DeviceService, "Device Service", "Go", "Централизованное управление:\n - Добавление/удаление устройств\n - Привязка к пользователю и локации\n - Отображение статуса")
+}
+
+Container_Boundary(TelemetryDomain, "Сбор и анализ телеметрии") {
+  ContainerQueue(TelemetryQueue, "Telemetry Queue", "RabbitMQ", "Буферизация и доставка показателей телеметрии")
+}
+
+Container_Boundary(UniversalSensorDomain, "Управление модулями ворот и замков") {
+  ContainerDb(UniversalDatabase, "Universal Database", "PostgreSQL", "Хранение параметров осветительных модулей и состояния ламп")
+    
+  Container(UniversalService, "Universal Service", "Go") {
+    Component(HttpDeliveryLayer, "HTTP Service Layer", "Реализация HTTP-сервера для получения и обработки команд")
+    Component(RepositoryLayer, "Repository Layer", "Слой работы с базой данных")
+    Component(ServiceLayer, "Service Layer", "Логика обработки команд:\n - обработка команд управления модулями\n - обработка потока телеметрии")
+    Component(SensorConnector, "Sensor Connector", "Коннектор подключения к модулям:\n - отправка команд\n - получение телеметрии")
+    ComponentQueue(UniversalTelemetryQueue, "Universal Telemetry Queue", "Очередь накопления и отправки телеметрии")
+
+    Rel(HttpDeliveryLayer, ServiceLayer, "Передача на обработку запросов")
+    Rel(ServiceLayer, RepositoryLayer, "Чтение/запись сущностей")
+    Rel(ServiceLayer, SensorConnector, "Команды к подключённым модулям")
+    Rel(ServiceLayer, UniversalTelemetryQueue, "Добавление в очередь телеметрии")
+  }
+}
+
+Rel(DeviceService, HttpDeliveryLayer, "- Запросы на добавление/удаление модулей\n- Команды управления модулями", "HTTP")
+Rel(RepositoryLayer, UniversalDatabase, "Чтение/Запись данных модулей", "SQL")
+Rel(UniversalTelemetryQueue, TelemetryQueue, "Отправка данных телеметрии", "AMQP")
+
+Rel(SensorConnector, UniversalSensor, "- Отправка команд модулю\n- Получение телеметрии")
+
+@enduml

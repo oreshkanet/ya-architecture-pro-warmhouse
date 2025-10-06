@@ -1,0 +1,52 @@
+@startuml Component_AutomationService
+title SmartHome: Automation Service — Component Diagram
+
+!includeurl ../c4/C4_Component.puml
+
+Container(ApiGateway, "API Gateway", "Kong", "Маршрутизация запросов, JWT")
+
+Container_Boundary(DeviceDomain, "Управление устройствами") {
+  Container(DeviceService, "Device Service", "Go", "Предоставляет список устройств пользователя")
+}
+
+Container_Boundary(TelemetryDomain, "Телеметрия") {
+  ContainerQueue(TelemetryQueue, "Telemetry Queue", "RabbitMQ", "Поток событий телеметрии")
+}
+
+Container_Boundary(AutomationDomain, "Автоматизация") {
+  ContainerDb(DeviceDatabase, "Device & Automation DB", "PostgreSQL", "Хранение:\n* Определений сценариев\n* Истории запусков\n* Связей триггеров и действий")
+}
+
+Container_Boundary(AutomationServiceComponents, "Automation Service Internal Components") {
+  ContainerDb(DeviceDatabase, "Device & Automation DB", "PostgreSQL", "Хранение:\n - Определений сценариев\n - Истории запусков\n - Связей триггеров и действий")
+
+  Container(AutomationService, "Automation Service", "Go") {
+
+    Component(HttpApiLayer, "HTTP API Layer",, "REST-интерфейс:\n* Создание и редактирование правил\n* Запуск сценариев\n* Проверка прав доступа через JWT")
+    Component(ScheduleManager, "Schedule Manager", ,"Запуск по сценариев по расписанию")
+    Component(RuleEngine, "Rule Engine",, "Движок выполнения правил автоматизации")
+    Component(TriggerProcessor, "Trigger Processor",, "Обработка входящих событий:\n* Обработка потока телеметрии\n* Фильтрация телеметрии\n* Активация правила")
+    Component(ActionExecutor, "Action Executor",, "Выполнение действий:\n* Отправка команд через DeviceService")
+    Component(RepositoryLayer, "Repository Layer",, "Работа с PostgreSQL:\n* Сохранение/чтение правил\n* История выполнения")
+    Component(DeviceClient, "Device Service Client",, "Клиент для отправки команд устройствам в Device Service")
+
+    Rel(HttpApiLayer, RuleEngine, "Создание/редактирование правила, запуск сценария", "call")
+
+    Rel(TriggerProcessor, RepositoryLayer, "Загрузка активных правил", "SQL")
+    Rel(TriggerProcessor, RuleEngine, "Запуск сценария", "evaluate")
+
+    Rel(RuleEngine, ActionExecutor, "Запуск действия", "execute")
+    Rel(RuleEngine, RepositoryLayer, "Логирование результата", "SQL")
+
+    Rel(ActionExecutor, DeviceClient, "Отправка команды", "HTTP/MQTT")
+    
+    Rel(ScheduleManager, RuleEngine, "Запуск по расписанию", "cron trigger")
+  }
+  Rel(RepositoryLayer, DeviceDatabase, "CRUD операции", "SQL")
+}
+
+Rel(ApiGateway, HttpApiLayer, "Проксирование запросов", "HTTPS")
+Rel(TelemetryQueue, TriggerProcessor, "Получение телеметрии", "AMQP")
+Rel(DeviceClient, DeviceService, "Отправка команд устройствам", "HTTP")
+
+@enduml
