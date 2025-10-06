@@ -1,57 +1,141 @@
-@startuml WarmHouse_Container
-
-!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
-
+@startuml WarmHouse_Container_ToBe
 title WarmHouse Container Diagram
 
-skinparam wrapWidth 300
-skinparam linetype polyline
+top to bottom direction
 
-Person_Ext(User, "Пользователь системы", "Подключает и управляет новыми устройствами, Настраивает сценарии, Просматривает телеметрию")
-Person(Support, "Специалист поддержки", "Осуществляет поддержку пользователей")
+!include ../c4/C4_Container.puml
 
-System_Ext(Device, "Подключенные устройства", "Устройства управления отоплением, светом, воротами, универсальное устройство", "Uses HTTP API, MQTT")
+' ПОЛЬЗОВАТЕЛИ
+Person_Ext(User, "User", "Пользователь системы:\n— Подключает устройства\n— Настраивает сценарии\n— Просматривает телеметрию")
+Person(Support, "Support", "Специалист поддержки:\n— Консультирует пользователей\n— Решает технические инциденты")
 
+' ВНЕШНИЕ УСТРОЙСТВА
+System_Ext(WarmSensor, "Warm Sensor", "Модуль управления отоплением", "Протоколы: HTTP API, MQTT")
+System_Ext(DoorSensor, "Door Sensor", "Модуль управления дверями", "Протоколы: HTTP API, MQTT")
+System_Ext(LightSensor, "Light Sensor", "Модуль управления светом", "Протоколы: HTTP API, MQTT")
+System_Ext(VideoSensor, "Video Sensor", "Модуль управления видеонаблюдением", "Протоколы: HTTP API, MQTT")
+System_Ext(UniversalSensor, "Universal Sensor", "Универсальный модуль умного дома", "Протоколы: HTTP API, MQTT")
+
+' ОСНОВНАЯ СИСТЕМА
 System_Boundary(WarmHouseSystem, "WarmHouse System") {
-    System(UserInterfacesDomain, "Пользовательские интерфейсы", "Личный кабинет пользователя, интерфейсы службы поддержки ")
-    
-    Container_Boundary(DeviceManagementDomain, "Управление устройствами") {
-        System(UserDeviceDomain, "Устройства пользователя", "Подключение и отключение устройств пользователя различных типов")
-        System(DeviceIntegrationDomain, "Взаимодействие с устройствами", "Организация коммуникации с подключенными устройствами: отправка команд устройствам, сбор телеметрии устройств")
 
-        Rel_U(DeviceIntegrationDomain, UserDeviceDomain, "Получение параметров устройств")
+    ' --- Интерфейсы ---
+    Container(WebApp, "Web Application", "Angular, Node.JS", "Web-интерфейс для работы с системой")
+    Container(MobileApp, "Mobile Application", "Kotlin, Swift", "Мобильное приложение для работы с системой")
+    Container(ApiGateway, "API Gateway", "Kong", "Единая точка входа:\n - Маршрутизация запросов\n - Аутентификация через JWT\n - Rate limiting, CORS")
+
+    Rel(WebApp, ApiGateway, "Отправляет команды и получает данные", "HTTPS")
+    Rel(MobileApp, ApiGateway, "Отправляет команды и получает данные", "HTTPS")
+
+    Rel(User, WebApp, "Подключает и управляет новыми устройствами, Настраивает сценарии, Просматривает телеметрию")
+    Rel(User, MobileApp, "Подключает и управляет новыми устройствами, Настраивает сценарии, Просматривает телеметрию")
+    Rel(Support, WebApp, "Осуществляет поддержку пользователей")
+
+    ' --- ДОМЕН: Управление пользователями ---
+    Container_Boundary(UserDomain, "Управление пользователями") {
+        Container(UserService, "User Service", "Node.JS", "Управление профилями:\n - Регистрация, вход, сброс пароля\n - Хранение настроек интерфейса\n - Работа с OAuth2/JWT")
+        ContainerDb(UsersDatabase, "Users Database", "PostgreSQL", "Хранение учётных данных пользователей системы")
+        
+        Rel(UserService, UsersDatabase, "Чтение/запись данных пользователя", "SQL")
     }
 
-    Container_Boundary(ScenarioDomain, "Сценарии устройств") {
-        System(ScenarioManagementDomain, "Управление сценариями", "Создание, изменение и настройка сценариев управления устройствами")
-        System(ScenarioProcessingDomain, "Выполнение сценариев", "Обработка триггеров запуска сценариев, выполнение сценариев управления устройствами")
+    ' --- ДОМЕН: Управление устройствами --- 
+    Container_Boundary(SensorsDomain, "Управление датчиками и модулями устройств") {
 
-        Rel_R(ScenarioProcessingDomain, ScenarioManagementDomain, "Получение параметров устройств")
+        ' Отопление
+        Container_Boundary(WarmSensorDomain, "Управление отоплением") {
+            Container(WarmService, "Warm Service", "Go", "Логика управления модулями отопления:\n - Включение/выключение\n - Установка температуры\n - Сбор телеметрии")
+            ContainerDb(WarmDatabase, "Warm Service", "PostgreSQL", "Хранение параметров отопительных устройств и состояния подключения")
+            
+            Rel_R(WarmService, WarmDatabase, "Чтение и запись параметров подключения к устройствам", "SQL")
+        }
+
+        ' Освещение
+        Container_Boundary(LightSensorDomain, "Управление освещением") {
+            Container(LightService, "Light Service", "Go", "Управлени модулями света:\n - Включение/выключение\n - Яркость, цвет (RGB)\n - Сбор телеметрии")
+            ContainerDb(LightDatabase, "Light Database", "PostgreSQL", "Хранение параметров осветительных модулей и состояния ламп")
+            
+            Rel_R(LightService, LightDatabase, "Чтение и запись параметров подключения к устройствам", "SQL")
+        }
+
+        ' Ворота и замки
+        Container_Boundary(DoorSensorDomain, "Управление модулями ворот и замков") {
+            Container(DoorService, "Door Service", "Go", "Управление модулями ворот:\n - Открытие/закрытие ворот\n - Статус замка\n - Сбор телеметрии")
+            ContainerDb(DoorDatabase, "Door Database", "PostgreSQL", "Хранение параметров модулей ворот, состояние и журнала доступа")
+            
+            Rel_R(DoorService, DoorDatabase, "Чтение и запись параметров подключения к устройствам", "SQL")
+        }
+
+        ' Видеонаблюдение
+        Container_Boundary(VideoSensorDomain, "Видеонаблюдение") {
+            Container(VideoService, "Video Service", "Go", "Обработка видео:\n - Поддержка RTSP/HTTP стримов\n - Запись событий\n - Интеграция с детектором движения\n - Сбор телеметрии")
+            ContainerDb(VideoDatabase, "Video Database", "PostgreSQL", "Хранение параметров модулей и метаданных:\n - Ссылки на записи\n - Временные метки\n - Типы событий")
+            ContainerDb(VideoStorage, "Video Storage", "S3 / MinIO", "Хранение видеофрагментов")
+            
+            Rel_R(VideoService, VideoDatabase, "Чтение и запись параметров подключения к устройствам и метаданных события", "SQL")
+            Rel_L(VideoService, VideoStorage, "Сохранение видеофрагментов", "S3 API")
+        }
+        
+        ' Универсальные устройства
+        Container_Boundary(UniversalSensorDomain, "Универсальные устройства") {
+            Container(UniversalService, "Universal Service", "Go", "Управление универсальными устройствами:\n - Включение/выключение\n - Сбор телеметрии")
+            ContainerDb(UniversalDatabase, "Universal Database", "PostgreSQL", "Хранение параметров подключения к модулям и их состояние")
+            
+            Rel_R(UniversalService, UniversalDatabase, "Чтение и запись параметров подключения к устройствам", "SQL")
+        }
+    }
+
+    ' --- ДОМЕН: Управление устройствами пользователя ---
+    Container_Boundary(DeviceDomain, "Управление устройствами пользователей") {
+        Container(DeviceService, "Device Service", "Go", "Централизованное управление:\n - Добавление/удаление устройств\n - Привязка к пользователю и локации\n - Отображение статуса")
+        Container(AutomationService, "Automation Service", "Go", "Создание и выполнение сценариев. Поддержка триггеров и условий")
+        ContainerDb(DeviceDatabase, "Device & Automation DB", "PostgreSQL", "Хранение:\n - Привязанных устройств к пользователям\n - Настроенных сценариев\n - Истории запусков сценариев")
+        
+        Rel_R(DeviceService, DeviceDatabase, "Чтение/запись информации об устройствах\nСохранение правил автоматизации", "SQL")
+        Rel(AutomationService, DeviceService, "Получение списка устройств", "REST HTTP")     
     }
   
-    System(TelemetryDomain, "Телеметрия устройств", "Обработка потока входящей телеметрии, предоставление отчётов и дашбордов телеметрии")
-} 
+    ' --- ДОМЕН: Телеметрия ---
+    Container_Boundary(TelemetryDomain, "Сбор и анализ телеметрии") {
+        Container(TelemetryService, "Telemetry Processing Service", "Go", "Обработка потока данных:\n - Приём показаний с датчиков\n - Валидация\n - Агрегация")
+        ContainerQueue(TelemetryQueue, "Telemetry Queue", "RabbitMQ", "Буферизация и доставка показателей телеметрии")
+        ContainerDb(TelemetryDatabase, "Telemetry Database", "ClickHouse", "Хранение данных о телеметрии устройств")
 
-' Взаимодействие пользователей с системой
-Rel(User, UserInterfacesDomain, "Личный кабинет пользователя")
-Rel(Support, UserInterfacesDomain, "Интерфейс службы поддержки")
+        Rel_R(TelemetryQueue, TelemetryService, "Поток событий телеметрии", "AMQP")
+        Rel(TelemetryService, TelemetryDatabase, "Запись агрегированных показателей телеметрии", "HTTP")
+    }
+}
+
+' ВНУТРЕННИЕ СВЯЗИ
 
 ' Взаимодействие с внешними устройствами
-Rel(DeviceIntegrationDomain, Device, "Отправка команд устройству")
-BiRel(DeviceIntegrationDomain, Device, "Получение и сбор телеметрии с устройства")
+Rel(WarmService, WarmSensor, "Отправка команд, опрос состояния", "MQTT/HTTP")
+Rel(LightService, LightSensor, "Отправка команд, опрос состояния", "MQTT/HTTP")
+Rel(DoorService, DoorSensor, "Отправка команд, опрос состояния", "MQTT/HTTP")
+Rel(VideoService, VideoSensor, "Отправка команд, опрос состояния", "MQTT/HTTP")
+Rel(UniversalService, UniversalSensor, "Отправка команд, опрос состояния", "MQTT/HTTP")
 
-' Поддомен ScenarioManagementDomain
-Rel(ScenarioProcessingDomain, UserDeviceDomain, "Получение параметров устройств")
+' Интеграция сервисов
+Rel(DeviceService, WarmService, "Подключение/Удаление модулей\nЗапрос статуса")
+Rel(DeviceService, LightService, "Подключение/Удаление модулей\nЗапрос статуса")
+Rel(DeviceService, DoorService, "Подключение/Удаление модулей\nЗапрос статуса")
+Rel(DeviceService, VideoService, "Подключение/Удаление модулей\nЗапрос статуса")
+Rel(DeviceService, UniversalService, "Подключение/Удаление модулей\nЗапрос статуса")
 
-' Поддомен ScenarioProcessingDomain
-Rel_R(DeviceIntegrationDomain, ScenarioProcessingDomain, "Телеметрия подключенных устройств")
-Rel_L(ScenarioProcessingDomain, DeviceIntegrationDomain, "Команды подключенным устройствам")
+' Телеметрия → Автоматизация
+Rel(TelemetryQueue, AutomationService, "Передача событий-триггеров", "AMQP")
 
-' Поддомен TelemetryDomain
-Rel_L(DeviceIntegrationDomain, TelemetryDomain, "Телеметрия подключенных устройств")
+' Отопление → Телеметрия
+Rel_U(WarmService, TelemetryQueue, "Отправка телеметрии устройств", "MQTT")
+Rel_U(LightService, TelemetryQueue, "Отправка телеметрии устройств", "MQTT")
+Rel_U(DoorService, TelemetryQueue, "Отправка телеметрии устройств", "MQTT")
+Rel_U(VideoService, TelemetryQueue, "Отправка телеметрии устройств", "MQTT")
+Rel_U(UniversalService, TelemetryQueue, "Отправка телеметрии устройств", "MQTT")
 
-Rel(UserInterfacesDomain, TelemetryDomain, "Запросы построения отчётов и дашбордов телеметрии устройств")
-Rel(UserInterfacesDomain, ScenarioManagementDomain, "Команды настройки сценариев устройств")
-Rel(UserInterfacesDomain, UserDeviceDomain, "Команды настройки устройств пользователя")
+' API Gateway → Все сервисы
+Rel(ApiGateway, UserService, "Авторизация, профиль", "HTTPS")
+Rel(ApiGateway, DeviceService, "Управление устройствами", "HTTPS")
+Rel(ApiGateway, TelemetryService, "Запрос телеметрии", "HTTPS")
+Rel(ApiGateway, AutomationService, "Управление сценариями", "HTTPS")
 
 @enduml
