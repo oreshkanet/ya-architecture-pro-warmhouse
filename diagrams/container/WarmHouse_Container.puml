@@ -8,13 +8,11 @@ Person_Ext(User, "User", "Пользователь системы:\n— Подк
 Person(Support, "Support", "Специалист поддержки:\n— Консультирует пользователей\n— Решает технические инциденты")
 
 ' ВНЕШНИЕ УСТРОЙСТВА
-' Boundary(ExternalSensors, "Модули умного дома") {
-    System_Ext(WarmSensor, "Warm Sensor", "Модуль управления отоплением", "Протоколы: HTTP API, MQTT")
-    System_Ext(DoorSensor, "Door Sensor", "Модуль управления дверями", "Протоколы: HTTP API, MQTT")
-    System_Ext(LightSensor, "Light Sensor", "Модуль управления светом", "Протоколы: HTTP API, MQTT")
-    System_Ext(VideoSensor, "Video Sensor", "Модуль управления видеонаблюдением", "Протоколы: HTTP API, MQTT")
-    System_Ext(UniversalSensor, "Universal Sensor", "Универсальный модуль умного дома", "Протоколы: HTTP API, MQTT")
-' }
+System_Ext(WarmSensor, "Warm Sensor", "Модуль управления отоплением", "Протоколы: HTTP API, MQTT")
+System_Ext(DoorSensor, "Door Sensor", "Модуль управления дверями", "Протоколы: HTTP API, MQTT")
+System_Ext(LightSensor, "Light Sensor", "Модуль управления светом", "Протоколы: HTTP API, MQTT")
+System_Ext(VideoSensor, "Video Sensor", "Модуль управления видеонаблюдением", "Протоколы: HTTP API, MQTT")
+System_Ext(UniversalSensor, "Universal Sensor", "Универсальный модуль умного дома", "Протоколы: HTTP API, MQTT")
 
 ' ОСНОВНАЯ СИСТЕМА
 System_Boundary(WarmHouseSystem, "WarmHouse System") {
@@ -76,10 +74,15 @@ System_Boundary(WarmHouseSystem, "WarmHouse System") {
         
         ' Отопление
         Container_Boundary(WarmSensorDomain, "Управление отоплением") {
+            Container(SmartHomeMonolith, "Smart Home Monolith", "Go", "Монолитное решение управления отоплением")
+            ContainerDb(SmartHomeMonolithDatabase, "Smart Home Monolith Database", "PostgreSQL", "База данных монолитного сервиса")
+            
             Container(WarmService, "Warm Service", "Go", "Логика управления модулями отопления:\n - Включение/выключение\n - Установка температуры\n - Сбор телеметрии")
-            ContainerDb(WarmDatabase, "Warm Service", "PostgreSQL", "Хранение параметров отопительных устройств и состояния подключения")
+            ContainerDb(WarmDatabase, "Warm Database", "PostgreSQL", "Хранение параметров отопительных устройств и состояния подключения")
             
             Rel_R(WarmService, WarmDatabase, "Чтение и запись параметров подключения к устройствам", "SQL")
+            Rel_L(SmartHomeMonolith, SmartHomeMonolithDatabase, "Чтение и запись параметров подключения к устройствам", "SQL")
+            Rel_L(WarmService, SmartHomeMonolith, "Управление модулями, подключенными к монолитному решению", "HTTP")
         }
 
         ' Освещение
@@ -125,6 +128,7 @@ System_Boundary(WarmHouseSystem, "WarmHouse System") {
 ' ВНУТРЕННИЕ СВЯЗИ
 
 ' Взаимодействие с внешними устройствами
+Rel(SmartHomeMonolith, WarmSensor, "Отправка команд, опрос состояния", "MQTT/HTTP")
 Rel(WarmService, WarmSensor, "Отправка команд, опрос состояния", "MQTT/HTTP")
 Rel(LightService, LightSensor, "Отправка команд, опрос состояния", "MQTT/HTTP")
 Rel(DoorService, DoorSensor, "Отправка команд, опрос состояния", "MQTT/HTTP")
