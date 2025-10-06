@@ -1,8 +1,6 @@
 @startuml WarmHouse_Container_ToBe
 title WarmHouse Container Diagram
 
-top to bottom direction
-
 !include ../c4/C4_Container.puml
 
 ' ПОЛЬЗОВАТЕЛИ
@@ -10,11 +8,13 @@ Person_Ext(User, "User", "Пользователь системы:\n— Подк
 Person(Support, "Support", "Специалист поддержки:\n— Консультирует пользователей\n— Решает технические инциденты")
 
 ' ВНЕШНИЕ УСТРОЙСТВА
-System_Ext(WarmSensor, "Warm Sensor", "Модуль управления отоплением", "Протоколы: HTTP API, MQTT")
-System_Ext(DoorSensor, "Door Sensor", "Модуль управления дверями", "Протоколы: HTTP API, MQTT")
-System_Ext(LightSensor, "Light Sensor", "Модуль управления светом", "Протоколы: HTTP API, MQTT")
-System_Ext(VideoSensor, "Video Sensor", "Модуль управления видеонаблюдением", "Протоколы: HTTP API, MQTT")
-System_Ext(UniversalSensor, "Universal Sensor", "Универсальный модуль умного дома", "Протоколы: HTTP API, MQTT")
+' Boundary(ExternalSensors, "Модули умного дома") {
+    System_Ext(WarmSensor, "Warm Sensor", "Модуль управления отоплением", "Протоколы: HTTP API, MQTT")
+    System_Ext(DoorSensor, "Door Sensor", "Модуль управления дверями", "Протоколы: HTTP API, MQTT")
+    System_Ext(LightSensor, "Light Sensor", "Модуль управления светом", "Протоколы: HTTP API, MQTT")
+    System_Ext(VideoSensor, "Video Sensor", "Модуль управления видеонаблюдением", "Протоколы: HTTP API, MQTT")
+    System_Ext(UniversalSensor, "Universal Sensor", "Универсальный модуль умного дома", "Протоколы: HTTP API, MQTT")
+' }
 
 ' ОСНОВНАЯ СИСТЕМА
 System_Boundary(WarmHouseSystem, "WarmHouse System") {
@@ -36,12 +36,44 @@ System_Boundary(WarmHouseSystem, "WarmHouse System") {
         Container(UserService, "User Service", "Node.JS", "Управление профилями:\n - Регистрация, вход, сброс пароля\n - Хранение настроек интерфейса\n - Работа с OAuth2/JWT")
         ContainerDb(UsersDatabase, "Users Database", "PostgreSQL", "Хранение учётных данных пользователей системы")
         
-        Rel(UserService, UsersDatabase, "Чтение/запись данных пользователя", "SQL")
+        Rel_L(UserService, UsersDatabase, "Чтение/запись данных пользователя", "SQL")
+    }
+
+    ' --- ДОМЕН: Управление устройствами пользователя ---
+    Container_Boundary(DeviceDomain, "Управление устройствами пользователей") {
+        Container(DeviceService, "Device Service", "Go", "Централизованное управление:\n - Добавление/удаление устройств\n - Привязка к пользователю и локации\n - Отображение статуса")
+        Container(AutomationService, "Automation Service", "Go", "Создание и выполнение сценариев. Поддержка триггеров и условий")
+        ContainerDb(DeviceDatabase, "Device & Automation DB", "PostgreSQL", "Хранение:\n - Привязанных устройств к пользователям\n - Настроенных сценариев\n - Истории запусков сценариев")
+        
+        Rel_R(DeviceService, DeviceDatabase, "Чтение/запись информации об устройствах\nСохранение правил автоматизации", "SQL")
+        Rel(AutomationService, DeviceService, "Получение списка устройств", "REST HTTP")     
+    }
+  
+    ' --- ДОМЕН: Телеметрия ---
+    Container_Boundary(TelemetryDomain, "Сбор и анализ телеметрии") {
+        Container(TelemetryService, "Telemetry Processing Service", "Go", "Обработка потока данных:\n - Приём показаний с датчиков\n - Валидация\n - Агрегация")
+        ContainerQueue(TelemetryQueue, "Telemetry Queue", "RabbitMQ", "Буферизация и доставка показателей телеметрии")
+        ContainerDb(TelemetryDatabase, "Telemetry Database", "ClickHouse", "Хранение данных о телеметрии устройств")
+
+        Rel_L(TelemetryQueue, TelemetryService, "Поток событий телеметрии", "AMQP")
+        Rel(TelemetryService, TelemetryDatabase, "Запись агрегированных показателей телеметрии", "HTTP")
     }
 
     ' --- ДОМЕН: Управление устройствами --- 
     Container_Boundary(SensorsDomain, "Управление датчиками и модулями устройств") {
 
+        ' Центральная точка для уменьшения пересечений
+        cloud "[PROXY SENSORS]" as ProxySensors
+        
+        ' ГРУППА: Сервисы управления устройствами ---
+        note left of ProxySensors
+            Все сервисы однотипны по архитектуре:
+            • Go
+            • REST + MQTT
+            • Своя логика управления
+            • Отправляют телеметрию в очередь
+        end note
+        
         ' Отопление
         Container_Boundary(WarmSensorDomain, "Управление отоплением") {
             Container(WarmService, "Warm Service", "Go", "Логика управления модулями отопления:\n - Включение/выключение\n - Установка температуры\n - Сбор телеметрии")
@@ -85,25 +117,9 @@ System_Boundary(WarmHouseSystem, "WarmHouse System") {
         }
     }
 
-    ' --- ДОМЕН: Управление устройствами пользователя ---
-    Container_Boundary(DeviceDomain, "Управление устройствами пользователей") {
-        Container(DeviceService, "Device Service", "Go", "Централизованное управление:\n - Добавление/удаление устройств\n - Привязка к пользователю и локации\n - Отображение статуса")
-        Container(AutomationService, "Automation Service", "Go", "Создание и выполнение сценариев. Поддержка триггеров и условий")
-        ContainerDb(DeviceDatabase, "Device & Automation DB", "PostgreSQL", "Хранение:\n - Привязанных устройств к пользователям\n - Настроенных сценариев\n - Истории запусков сценариев")
-        
-        Rel_R(DeviceService, DeviceDatabase, "Чтение/запись информации об устройствах\nСохранение правил автоматизации", "SQL")
-        Rel(AutomationService, DeviceService, "Получение списка устройств", "REST HTTP")     
-    }
-  
-    ' --- ДОМЕН: Телеметрия ---
-    Container_Boundary(TelemetryDomain, "Сбор и анализ телеметрии") {
-        Container(TelemetryService, "Telemetry Processing Service", "Go", "Обработка потока данных:\n - Приём показаний с датчиков\n - Валидация\n - Агрегация")
-        ContainerQueue(TelemetryQueue, "Telemetry Queue", "RabbitMQ", "Буферизация и доставка показателей телеметрии")
-        ContainerDb(TelemetryDatabase, "Telemetry Database", "ClickHouse", "Хранение данных о телеметрии устройств")
-
-        Rel_R(TelemetryQueue, TelemetryService, "Поток событий телеметрии", "AMQP")
-        Rel(TelemetryService, TelemetryDatabase, "Запись агрегированных показателей телеметрии", "HTTP")
-    }
+    ' Lay_R(UserDomain, DeviceDomain)
+    ' Lay_R(DeviceDomain, TelemetryDomain)
+    ' Lay_U(SensorsDomain, DeviceDomain)
 }
 
 ' ВНУТРЕННИЕ СВЯЗИ
@@ -116,26 +132,36 @@ Rel(VideoService, VideoSensor, "Отправка команд, опрос сос
 Rel(UniversalService, UniversalSensor, "Отправка команд, опрос состояния", "MQTT/HTTP")
 
 ' Интеграция сервисов
-Rel(DeviceService, WarmService, "Подключение/Удаление модулей\nЗапрос статуса")
-Rel(DeviceService, LightService, "Подключение/Удаление модулей\nЗапрос статуса")
-Rel(DeviceService, DoorService, "Подключение/Удаление модулей\nЗапрос статуса")
-Rel(DeviceService, VideoService, "Подключение/Удаление модулей\nЗапрос статуса")
-Rel(DeviceService, UniversalService, "Подключение/Удаление модулей\nЗапрос статуса")
+' Rel(DeviceService, WarmService, "Подключение/Удаление модулей\nЗапрос статуса")
+' Rel(DeviceService, LightService, "Подключение/Удаление модулей\nЗапрос статуса")
+' Rel(DeviceService, DoorService, "Подключение/Удаление модулей\nЗапрос статуса")
+' Rel(DeviceService, VideoService, "Подключение/Удаление модулей\nЗапрос статуса")
+' Rel(DeviceService, UniversalService, "Подключение/Удаление модулей\nЗапрос статуса")
+
+' Используем прокси-объект, чтобы не пересекать связи
+
+Rel(DeviceService, ProxySensors, "REST", "Запрос статуса устройств")
+Rel(ProxySensors, TelemetryQueue, "MQTT", "Телеметрия от всех сервисов")
+Rel(ProxySensors, WarmService, "", "")
+Rel(ProxySensors, LightService, "", "")
+Rel(ProxySensors, DoorService, "", "")
+Rel(ProxySensors, VideoService, "", "")
+Rel(ProxySensors, UniversalService, "", "")
 
 ' Телеметрия → Автоматизация
 Rel(TelemetryQueue, AutomationService, "Передача событий-триггеров", "AMQP")
 
 ' Отопление → Телеметрия
-Rel_U(WarmService, TelemetryQueue, "Отправка телеметрии устройств", "MQTT")
-Rel_U(LightService, TelemetryQueue, "Отправка телеметрии устройств", "MQTT")
-Rel_U(DoorService, TelemetryQueue, "Отправка телеметрии устройств", "MQTT")
-Rel_U(VideoService, TelemetryQueue, "Отправка телеметрии устройств", "MQTT")
-Rel_U(UniversalService, TelemetryQueue, "Отправка телеметрии устройств", "MQTT")
+' Rel_U(WarmService, TelemetryQueue, "Отправка телеметрии устройств", "MQTT")
+' Rel_U(LightService, TelemetryQueue, "Отправка телеметрии устройств", "MQTT")
+' Rel_U(DoorService, TelemetryQueue, "Отправка телеметрии устройств", "MQTT")
+' Rel_U(VideoService, TelemetryQueue, "Отправка телеметрии устройств", "MQTT")
+' Rel_U(UniversalService, TelemetryQueue, "Отправка телеметрии устройств", "MQTT")
 
 ' API Gateway → Все сервисы
-Rel(ApiGateway, UserService, "Авторизация, профиль", "HTTPS")
-Rel(ApiGateway, DeviceService, "Управление устройствами", "HTTPS")
-Rel(ApiGateway, TelemetryService, "Запрос телеметрии", "HTTPS")
-Rel(ApiGateway, AutomationService, "Управление сценариями", "HTTPS")
+Rel_D(ApiGateway, UserService, "Авторизация, профиль", "HTTPS")
+Rel_D(ApiGateway, DeviceService, "Управление устройствами", "HTTPS")
+Rel_D(ApiGateway, TelemetryService, "Запрос телеметрии", "HTTPS")
+Rel_D(ApiGateway, AutomationService, "Управление сценариями", "HTTPS")
 
 @enduml
