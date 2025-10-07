@@ -168,6 +168,17 @@ func (s *WarmService) SetTemperature(ctx context.Context, id string, target floa
 	return sensor, nil
 }
 
+func (s *WarmService) SetTemperatureByDeviceId(ctx context.Context, device_id string, target float64) ([]*domain.WarmSensor, error) {
+	sensors, err := s.repo.GetByDeviceID(ctx, device_id)
+	if err != nil {
+		return nil, err
+	}
+	for _, v := range sensors {
+		s.SetTemperature(ctx, v.ID, target)
+	}
+	return sensors, nil
+}
+
 func (s *WarmService) Toggle(ctx context.Context, id string, on bool) (*domain.WarmSensor, error) {
 	sensor, err := s.repo.GetByID(ctx, id)
 	if err != nil || sensor == nil {
@@ -179,6 +190,17 @@ func (s *WarmService) Toggle(ctx context.Context, id string, on bool) (*domain.W
 		return nil, err
 	}
 	return sensor, nil
+}
+
+func (s *WarmService) ToggleByDeviceId(ctx context.Context, device_id string, on bool) ([]*domain.WarmSensor, error) {
+	sensors, err := s.repo.GetByDeviceID(ctx, device_id)
+	if err != nil {
+		return nil, err
+	}
+	for _, v := range sensors {
+		s.Toggle(ctx, v.ID, on)
+	}
+	return sensors, nil
 }
 
 func (s *WarmService) Delete(ctx context.Context, id string) error {

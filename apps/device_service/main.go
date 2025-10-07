@@ -2,22 +2,19 @@ package main
 
 import (
 	"context"
+	"device-service/internal/client"
+	"device-service/internal/delivery/http"
+	"device-service/internal/repository"
+	"device-service/internal/service"
 	"errors"
 	"log"
 	"os"
 	"os/signal"
 	"strconv"
 	"syscall"
-	"warm-service/internal/client/telemetry"
-	"warm-service/internal/delivery/http"
-	"warm-service/internal/repository"
-	"warm-service/internal/service"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/streadway/amqp"
 )
-
-const migrations = "file://migrations"
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -25,51 +22,39 @@ func main() {
 
 	dbURL := os.Getenv("DATABASE_URL")
 	dbName := os.Getenv("DATABASE_NAME")
-	rmqURL := os.Getenv("RABBITMQ_URL")
-	monolithURL := os.Getenv("MONOLITH_URL")
+	warmURL := os.Getenv("WARM_URL")
 
 	debugStr := os.Getenv("DEBUG")
 	isDebug, _ := strconv.ParseBool(debugStr)
 
-	// Подключение к RabbitMQ
-	rabbitConn, err := amqp.Dial(rmqURL)
-	if err != nil {
-		log.Fatal("RabbitMQ connect:", err)
-	}
-	defer rabbitConn.Close()
-
-	publisher, err := telemetry.NewPublisher(rabbitConn)
-	if err != nil {
-		log.Fatal("RabbitMQ channel:", err)
-	}
-
 	// Инициализация сервисов
-	pgxPool, err := pgxpool.New(ctx, dbURL+"/"+dbName)
+	pgxPool, err := pgxpool.New(ctx, dbURL+"/"+dbName+"?sslmode=disable")
 	if err != nil {
 		log.Fatal("pgx connect:", err)
 	}
 	defer pgxPool.Close()
 
-	repo := repository.NewWarmRepo(pgxPool)
-	warmService := service.NewWarmService(repo, publisher, monolithURL)
+	warmClient := client.NewWarmServiceClient(warmURL)
+	locationRepo := repository.NewLocationRepository(pgxPool)
+	deviceRepo := repository.NewDeviceRepository(pgxPool)
+	locationService := service.NewLocationService(locationRepo, deviceRepo)
+	deviceService := service.NewDeviceService(locationRepo, deviceRepo, warmClient)
 
 	// Создаём HTTP-сервер
-	httpServer := http.NewHttpService("8084", isDebug) // указываем порт с двоеточием
+	httpServer := http.NewHttpService("8082", isDebug)
 
 	// Регистрируем маршруты
-	handler := http.NewHandler(warmService)
-	handler.InitRoutes(httpServer.Engine()) // ← нужно передать *gin.Engine
+	handler := http.NewHandler(deviceService, locationService)
+	handler.InitRoutes(httpServer.Engine())
 
 	// Канал для сигналов ОС
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(sigCh)
 
-	warmService.StartTelemetryCollection(ctx)
-
 	// Запускаем сервер в отдельной горутине
 	go func() {
-		log.Println("Запуск HTTP-сервера на :8084")
+		log.Println("Запуск HTTP-сервера на :8082")
 		if err := httpServer.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("Ошибка запуска HTTP-сервера: %v", err)
 		}

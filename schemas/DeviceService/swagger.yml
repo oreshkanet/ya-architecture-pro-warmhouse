@@ -226,6 +226,38 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /devices/{id}/{command}:
+    post:
+      tags: [Устройства]
+      summary: Команда устройству
+      description: Выполнить одну из доступных команд устройству
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, command]
+              properties:
+                command:
+                  type: string
+                user_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Команда выполнена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '400':
+          description: Некорректные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /devices/{id}:
     get:
       tags: [Устройства]

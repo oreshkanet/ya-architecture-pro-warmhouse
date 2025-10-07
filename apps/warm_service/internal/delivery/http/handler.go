@@ -1,6 +1,7 @@
 package http
 
 import (
+	"errors"
 	"math/rand"
 	"net/http"
 	"time"
@@ -32,6 +33,8 @@ func (h *Handler) InitRoutes(srv *gin.Engine) {
 		api.POST("/warm", h.Register)
 		api.DELETE("/warm/:id", h.Delete)
 		api.GET("/warm/:id", h.GetByID)
+		api.POST("/warm/command", h.RunCommand)
+		api.POST("/warm/values", h.SetValues)
 		api.PATCH("/warm/:id", h.SetTemp)
 		api.POST("/warm/:id/on", h.TurnOn)
 		api.POST("/warm/:id/off", h.TurnOff)
@@ -91,6 +94,61 @@ func (h *Handler) GetByID(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, module)
+}
+
+func (h *Handler) RunCommand(c *gin.Context) {
+	var req struct {
+		Command  string `json:"command"`
+		DeviceId string `json:"device_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	var on bool
+	var err error
+	switch req.Command {
+	case "on":
+		on = true
+	case "off":
+		on = false
+	default:
+		err = errors.New("unknown command")
+	}
+	if err != nil {
+		c.JSON(http.StatusBadRequest, err)
+		return
+	}
+
+	module, err := h.warmService.ToggleByDeviceId(c.Request.Context(), req.DeviceId, on)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not_found"})
+		return
+	}
+	c.JSON(http.StatusOK, module)
+}
+
+func (h *Handler) SetValues(c *gin.Context) {
+	var req struct {
+		DeviceId   string  `json:"device_id"`
+		TargetTemp float64 `json:"target_temperature"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	if req.TargetTemp < 5 || req.TargetTemp > 30 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "temp_out_of_range"})
+		return
+	}
+	sensors, err := h.warmService.SetTemperatureByDeviceId(c.Request.Context(), req.DeviceId, req.TargetTemp)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not_found"})
+		return
+	}
+	c.JSON(http.StatusOK, sensors)
 }
 
 func (h *Handler) SetTemp(c *gin.Context) {

@@ -31,7 +31,7 @@ components:
       bearerFormat: JWT
 
   schemas:
-    WarmModule:
+    WarmSensor:
       type: object
       required:
         - id
@@ -44,9 +44,12 @@ components:
         name:
           type: string
           example: "Термостат в гостиной"
-        location:
+        device_id:
           type: string
           example: "Гостиная"
+        location:
+          type: string
+          example: "w1x2y3z4-a5b6-c7d8-e9f0-g1h2i3j4k5l6"
         serial_number:
           type: string
           example: "WH-HEAT-2025-001"
@@ -90,7 +93,36 @@ components:
           maximum: 30.0
           example: 22.0
 
-    RegisterWarmModuleRequest:
+    SetTemperatureByDeviceIdRequest:
+      type: object
+      required:
+        - target_temperature
+      properties:
+        target_temperature:
+          type: number
+          format: float
+          minimum: 5.0
+          maximum: 30.0
+          example: 22.0
+        device_id:
+          type: string
+          format: uuid
+          example: "w1x2y3z4-a5b6-c7d8-e9f0-g1h2i3j4k5l6"
+
+    RunCommandRequest:
+      type: object
+      required:
+        - target_temperature
+      properties:
+        command:
+          type: string
+          example: "on, off"
+        device_id:
+          type: string
+          format: uuid
+          example: "w1x2y3z4-a5b6-c7d8-e9f0-g1h2i3j4k5l6"
+
+    RegisterWarmSensorRequest:
       type: object
       required:
         - serial_number
@@ -137,6 +169,11 @@ paths:
           schema:
             type: string
           description: Фильтр по локации (например, "Гостиная")
+        - name: device_id
+          in: query
+          schema:
+            type: string
+          description: Фильтр по устройству (например, "Котёл отопления")
         - name: status
           in: query
           schema:
@@ -151,7 +188,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/WarmModule'
+                  $ref: '#/components/schemas/WarmSensor'
         '401':
           description: Неавторизован
           content:
@@ -170,14 +207,14 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RegisterWarmModuleRequest'
+                $ref: '#/components/schemas/RegisterWarmSensorRequest'
         responses:
           '201':
             description: Модуль успешно зарегистрирован
             content:
               application/json:
                 schema:
-                  $ref: '#/components/schemas/WarmModule'
+                  $ref: '#/components/schemas/WarmSensor'
           '400':
             description: Некорректные данные
             content:
@@ -207,8 +244,75 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WarmModule'
+                $ref: '#/components/schemas/WarmSensor'
 
+  /warm/command:
+    post:
+      tags: [Управление отоплением]
+      summary: Включить/Выключить отопление
+      description: |
+        Включае/отключает все модули устройства (device_id)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunCommandRequest'
+      responses:
+        '200':
+          description: Модуль успешно зарегистрирован
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WarmSensor'
+        '400':
+          description: Некорректные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Модуль уже зарегистрирован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    
+  /warm/values:
+    post:
+      tags: [Управление отоплением]
+      summary: Установить целевую температуру
+      description: |
+        Устанавливает температуру для всех модулей устройства (device_id)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetTemperatureByDeviceIdRequest'
+      responses:
+        '200':
+          description: Модуль успешно зарегистрирован
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WarmSensor'
+        '400':
+          description: Некорректные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Модуль уже зарегистрирован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /warm/{id}:
     get:
@@ -227,7 +331,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WarmModule'
+                $ref: '#/components/schemas/WarmSensor'
         '404':
           description: Модуль не найден
           content:
@@ -258,7 +362,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WarmModule'
+                $ref: '#/components/schemas/WarmSensor'
         '400':
           description: Недопустимое значение температуры
           content:
@@ -283,7 +387,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WarmModule'
+                $ref: '#/components/schemas/WarmSensor'
         '400':
           description: Нельзя включить (ошибка или offline)
           content:
@@ -308,7 +412,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WarmModule'
+                $ref: '#/components/schemas/WarmSensor'
         '400':
           description: Нельзя выключить (ошибка или offline)
           content:

@@ -14,7 +14,7 @@ skinparam class {
 ' === Пакеты ===
 package "warmservice" {
   package "model" {
-    class WarmModule {
+    class WarmSensor {
       +String id
       +String location
       +Float currentTemperature
@@ -50,7 +50,7 @@ package "warmservice" {
       +TurnOn(moduleId: String): Error
       +TurnOff(moduleId: String): Error
       +SetTargetTemperature(moduleId: String, temp: Float): Error
-      +GetStatus(moduleId: String): (WarmModule, Error)
+      +GetStatus(moduleId: String): (WarmSensor, Error)
       -validateTemperature(temp: Float): Boolean
       -isLegacyModule(moduleId: String): Boolean
     }
@@ -58,21 +58,21 @@ package "warmservice" {
 
   package "repository" {
     interface WarmRepositoryInterface {
-      +Save(module: WarmModule): Error
-      +FindById(id: String): (WarmModule, Error)
-      +Update(module: WarmModule): Error
+      +Save(module: WarmSensor): Error
+      +FindById(id: String): (WarmSensor, Error)
+      +Update(module: WarmSensor): Error
       +Delete(id: String): Error
-      +ListByUserId(userId: String): List<WarmModule>
+      +ListByUserId(userId: String): List<WarmSensor>
     }
 
     class WarmRepository {
       -DBConnection db
       ..
-      +Save(module: WarmModule): Error
-      +FindById(id: String): (WarmModule, Error)
-      +Update(module: WarmModule): Error
+      +Save(module: WarmSensor): Error
+      +FindById(id: String): (WarmSensor, Error)
+      +Update(module: WarmSensor): Error
       +Delete(id: String): Error
-      +ListByUserId(userId: String): List<WarmModule>
+      +ListByUserId(userId: String): List<WarmSensor>
     }
   }
 
@@ -125,7 +125,7 @@ package "warmservice" {
 }
 
 ' Связи между классами
-WarmUseCase --> WarmModule : uses
+WarmUseCase --> WarmSensor : uses
 WarmHandler --> WarmUseCase : uses
 WarmUseCase --> WarmRepositoryInterface : depends on
 WarmRepository --> WarmRepositoryInterface : implements
