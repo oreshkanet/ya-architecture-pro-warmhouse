@@ -1,0 +1,297 @@
+openapi: 3.0.3
+info:
+  title: Universal Service API
+  description:
+    REST API для управления универсальными модулями умного дома.
+    Позволяет подключать и управлять нестандартными устройствами
+    через произвольные команды и параметры (плагин-архитектура).
+  version: 1.0.0
+  contact:
+    name: Денис Сайгин
+
+servers:
+  - url: https://api.warmhouse.ru/v1      
+    description: Основной сервер
+  - url: http://localhost:8087/v1
+    description: Локальное окружение
+
+tags:
+  - name: Управление
+    description: Отправка кастомных команд, получение состояния
+  - name: Регистрация
+    description: Добавление новых универсальных модулей
+  - name: Состояние
+    description: Получение статуса и метаданных устройств
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    UniversalModule:
+      type: object
+      required:
+        - id
+        - location
+        - device_profile
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "u1v2w3x4-y5z6-a7b8-c9d0-e1f2g3h4i5j6"
+        name:
+          type: string
+          example: "Универсальный контроллер на балконе"
+        location:
+          type: string
+          example: "Балкон"
+        serial_number:
+          type: string
+          example: "WH-UNI-2025-004"
+        device_profile:
+          type: string
+          enum: [switch, sensor, actuator, gateway, custom]
+          example: "switch"
+        capabilities:
+          type: array
+          items:
+            type: string
+          example: ["on", "off", "getStatus"]
+          description: Поддерживаемые команды устройства
+        status:
+          type: string
+          enum: [online, offline, error]
+          example: "online"
+        current_state:
+          type: object
+          additionalProperties: true
+          example:
+            power: "on"
+            mode: "auto"
+            temperature: 22.5
+          description: Текущее состояние устройства (произвольная структура)
+        firmware_version:
+          type: string
+          nullable: true
+          example: "v1.0.0"
+        last_seen:
+          type: string
+          format: date-time
+          example: "2025-01-15T14:35:00Z"
+
+    SendCommandRequest:
+      type: object
+      required:
+        - command
+      properties:
+        command:
+          type: string
+          example: "turnOn"
+          description: Имя команды (должно быть в списке capabilities)
+        params:
+          type: object
+          additionalProperties: true
+          nullable: true
+          example:
+            brightness: 75
+            duration: 300
+          description: Произвольные параметры команды
+
+    RegisterUniversalModuleRequest:
+      type: object
+      required:
+        - serial_number
+        - location
+        - device_profile
+      properties:
+        serial_number:
+          type: string
+          example: "WH-UNI-2025-004"
+        name:
+          type: string
+          example: "Универсальный контроллер"
+        location:
+          type: string
+          example: "Балкон"
+        device_profile:
+          type: string
+          enum: [switch, sensor, actuator, gateway, custom]
+          example: "actuator"
+        firmware_version:
+          type: string
+          nullable: true
+          example: "v1.0.0"
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "device_not_found"
+        message:
+          type: string
+          example: "Универсальный модуль с таким ID не найден"
+        status:
+          type: integer
+          example: 404
+
+security:
+  - bearerAuth: []
+
+paths:
+  /universal:
+    get:
+      tags: [Состояние]
+      summary: Получить список всех универсальных модулей
+      parameters:
+        - name: location
+          in: query
+          schema:
+            type: string
+          description: Фильтр по локации (например, "Балкон")
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [online, offline]
+          description: Фильтр по статусу подключения
+        - name: profile
+          in: query
+          schema:
+            type: string
+            enum: [switch, sensor, actuator, gateway, custom]
+          description: Фильтр по типу устройства
+      responses:
+        '200':
+          description: Список универсальных модулей
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UniversalModule'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags: [Регистрация]
+      summary: Зарегистрировать новый универсальный модуль
+      description: |
+        Добавляет новое универсальное устройство в систему.
+        Может использоваться как напрямую, так и через DeviceService.
+        Требуется указать профиль устройства для корректной интеграции.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterUniversalModuleRequest'
+      responses:
+        '201':
+          description: Модуль успешно зарегистрирован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UniversalModule'
+        '400':
+          description: Некорректные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Модуль уже зарегистрирован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Регистрация]
+      summary: Удалить универсальный модуль
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Модуль удалён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UniversalModule'
+
+  /universal/{id}:
+    get:
+      tags: [Состояние]
+      summary: Получить состояние универсального модуля
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Текущее состояние модуля
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UniversalModule'
+        '404':
+          description: Модуль не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /universal/{id}/command:
+    post:
+      tags: [Управление]
+      summary: Отправить произвольную команду устройству
+      description: |
+        Отправляет кастомную команду универсальному устройству.
+        Команда должна быть в списке `capabilities` устройства.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendCommandRequest'
+      responses:
+        '200':
+          description: Команда отправлена, текущее состояние обновлено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UniversalModule'
+        '400':
+          description: Команда не поддерживается или недопустимые параметры
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Устройство не найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'

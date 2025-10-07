@@ -1,0 +1,373 @@
+openapi: 3.0.3
+info:
+  title: Door Service API
+  description:
+    REST API для управления модулями контроля доступа (ворота, замки) в системе "Умный дом".
+    Позволяет открывать/закрывать ворота, проверять статус замка,
+    регистрировать новые устройства и получать текущее состояние.
+  version: 1.0.0
+  contact:
+    name: Денис Сайгин
+
+servers:
+  - url: https://api.warmhouse.ru/v1    
+    description: Основной сервер
+  - url: http://localhost:8086/v1
+    description: Локальное окружение
+
+tags:
+  - name: Управление воротами и замками
+    description: Открытие, закрытие, блокировка устройств
+  - name: Регистрация
+    description: Добавление новых модулей контроля доступа
+  - name: Состояние
+    description: Получение статуса и данных о состоянии замков и ворот
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    DoorModule:
+      type: object
+      required:
+        - id
+        - location
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "d1e2f3g4-h5i6-j7k8-l9m0-n1o2p3q4r5s6"
+        name:
+          type: string
+          example: "Гаражные ворота"
+        location:
+          type: string
+          example: "Гараж"
+        serial_number:
+          type: string
+          example: "WH-DOOR-2025-003"
+        status:
+          type: string
+          enum: [online, offline, error]
+          example: "online"
+        door_state:
+          type: string
+          enum: [open, closed, opening, closing]
+          example: "closed"
+        lock_state:
+          type: string
+          enum: [locked, unlocked, jammed]
+          example: "locked"
+        is_locked:
+          type: boolean
+          example: true
+        is_open:
+          type: boolean
+          example: false
+        last_operation:
+          type: string
+          enum: [open, close, lock, unlock]
+          example: "close"
+        last_operation_time:
+          type: string
+          format: date-time
+          example: "2025-01-15T14:30:00Z"
+        firmware_version:
+          type: string
+          nullable: true
+          example: "v1.0.0"
+        last_seen:
+          type: string
+          format: date-time
+          example: "2025-01-15T14:30:10Z"
+
+    UpdateDoorRequest:
+      type: object
+      properties:
+        auto_lock_delay:
+          type: integer
+          minimum: 0
+          maximum: 300
+          description: Задержка автоблокировки в секундах
+          example: 30
+        notify_on_open:
+          type: boolean
+          example: true
+
+    RegisterDoorModuleRequest:
+      type: object
+      required:
+        - serial_number
+        - location
+      properties:
+        serial_number:
+          type: string
+          example: "WH-DOOR-2025-003"
+        name:
+          type: string
+          example: "Гаражные ворота"
+        location:
+          type: string
+          example: "Гараж"
+        firmware_version:
+          type: string
+          nullable: true
+          example: "v1.0.0"
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "device_not_found"
+        message:
+          type: string
+          example: "Модуль ворот с таким ID не найден"
+        status:
+          type: integer
+          example: 404
+
+security:
+  - bearerAuth: []
+
+paths:
+  /door:
+    get:
+      tags: [Состояние]
+      summary: Получить список всех модулей ворот и замков
+      parameters:
+        - name: location
+          in: query
+          schema:
+            type: string
+          description: Фильтр по локации (например, "Гараж", "Подъезд")
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [online, offline]
+          description: Фильтр по статусу подключения
+      responses:
+        '200':
+          description: Список модулей контроля доступа
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DoorModule'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags: [Регистрация]
+      summary: Зарегистрировать новый модуль ворот или замка
+      description: |
+        Добавляет новое физическое устройство контроля доступа в систему.
+        Может использоваться как напрямую, так и через DeviceService.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterDoorModuleRequest'
+      responses:
+        '201':
+          description: Модуль успешно зарегистрирован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DoorModule'
+        '400':
+          description: Некорректные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Модуль уже зарегистрирован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Регистрация]
+      summary: Удалить модуль ворот или замка
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Модуль удалён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DoorModule'
+
+  /door/{id}:
+    get:
+      tags: [Состояние]
+      summary: Получить состояние модуля ворот или замка
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Текущее состояние модуля
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DoorModule'
+        '404':
+          description: Модуль не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    patch:
+      tags: [Управление воротами и замками]
+      summary: Обновить настройки модуля (задержка автоблокировки и т.п.)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDoorRequest'
+      responses:
+        '200':
+          description: Настройки обновлены
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DoorModule'
+        '400':
+          description: Недопустимые значения
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /door/{id}/open:
+    post:
+      tags: [Управление воротами и замками]
+      summary: Открыть ворота или дверь
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Ворота/дверь открыты
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DoorModule'
+        '400':
+          description: Нельзя открыть (устройство offline или заблокировано)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /door/{id}/close:
+    post:
+      tags: [Управление воротами и замками]
+      summary: Закрыть ворота или дверь
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Ворота/дверь закрыты
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DoorModule'
+        '400':
+          description: Нельзя закрыть (ошибка или offline)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /door/{id}/lock:
+    post:
+      tags: [Управление воротами и замками]
+      summary: Заблокировать дверь (без закрытия)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Дверь заблокирована
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DoorModule'
+        '400':
+          description: Нельзя заблокировать
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /door/{id}/unlock:
+    post:
+      tags: [Управление воротами и замками]
+      summary: Разблокировать дверь
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Дверь разблокирована
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DoorModule'
+        '400':
+          description: Нельзя разблокировать
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'

@@ -1,0 +1,275 @@
+openapi: 3.0.3
+info:
+  title: Telemetry Service API
+  description:
+    REST API для получения и анализа данных телеметрии умного дома.
+    Предоставляет доступ к сырым показаниям, агрегированным данным,
+    а также поддерживает фильтрацию по устройствам, типам сенсоров и времени.
+  version: 1.0.0
+  contact:
+    name: Денис Сайгин
+
+servers:
+  - url: https://api.warmhouse.ru/v1
+    description: Основной сервер
+  - url: http://localhost:8089/v1
+    description: Локальное окружение
+
+tags:
+  - name: Телеметрия
+    description: Получение сырых данных с датчиков
+  - name: Агрегация
+    description: Получение усреднённых, пиковых и статистических данных
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    TelemetryPoint:
+      type: object
+      required:
+        - sensor_id
+        - value
+        - timestamp
+      properties:
+        id:
+          type: string
+          format: uuid
+          nullable: true
+          example: "t1u2v3w4-x5y6-z7a8-b9c0-d1e2f3g4h5i6"
+        sensor_id:
+          type: string
+          example: "sens-temp-living"
+        device_id:
+          type: string
+          example: "dev-001"
+        type:
+          type: string
+          enum: [temperature, humidity, brightness, door_status, motion]
+          example: "temperature"
+        unit:
+          type: string
+          example: "°C"
+        value:
+          oneOf:
+            - type: number
+            - type: boolean
+          example: 21.5
+        timestamp:
+          type: string
+          format: date-time
+          example: "2025-01-15T14:20:00Z"
+
+    AggregatedData:
+      type: object
+      required:
+        - metric
+        - value
+        - from
+        - to
+      properties:
+        metric:
+          type: string
+          enum: [avg_temperature, peak_brightness, min_humidity, motion_events_count]
+          example: "avg_temperature"
+        device_id:
+          type: string
+          example: "dev-001"
+        sensor_id:
+          type: string
+          example: "sens-temp-living"
+        value:
+          oneOf:
+            - type: number
+            - type: integer
+          example: 21.8
+        from:
+          type: string
+          format: date-time
+          example: "2025-01-15T14:00:00Z"
+        to:
+          type: string
+          format: date-time
+          example: "2025-01-15T14:15:00Z"
+        interval:
+          type: string
+          example: "5m"
+          description: Интервал агрегации
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "data_not_found"
+        message:
+          type: string
+          example: "Данные телеметрии за указанный период не найдены"
+        status:
+          type: integer
+          example: 404
+
+security:
+  - bearerAuth: []
+
+paths:
+  /telemetry/raw:
+    get:
+      tags: [Телеметрия]
+      summary: Получить сырые данные телеметрии
+      description: |
+        Возвращает необработанные показания с датчиков.
+        Подходит для построения детальных графиков.
+      parameters:
+        - name: sensor_id
+          in: query
+          schema:
+            type: string
+          description: Фильтр по ID сенсора
+        - name: device_id
+          in: query
+          schema:
+            type: string
+          description: Фильтр по устройству
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [temperature, humidity, brightness, door_status, motion]
+          description: Тип данных
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+          required: true
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+          required: true
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+      responses:
+        '200':
+          description: Список точек телеметрии
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TelemetryPoint'
+        '400':
+          description: Некорректные параметры (например, отсутствует `from`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /telemetry/aggregated:
+    get:
+      tags: [Агрегация]
+      summary: Получить агрегированные данные
+      description: |
+        Возвращает усреднённые, максимальные или счётные значения за интервал.
+        Используется для дашбордов и аналитики.
+      parameters:
+        - name: sensor_id
+          in: query
+          schema:
+            type: string
+        - name: device_id
+          in: query
+          schema:
+            type: string
+        - name: metric
+          in: query
+          schema:
+            type: string
+            enum: [avg, max, min, count]
+            default: avg
+          description: Тип агрегации
+        - name: data_type
+          in: query
+          schema:
+            type: string
+            enum: [temperature, humidity, brightness, motion]
+          required: true
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+          required: true
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+          required: true
+        - name: interval
+          in: query
+          schema:
+            type: string
+            enum: [1m, 5m, 15m, 1h]
+            default: 5m
+          description: Гранулярность данных
+      responses:
+        '200':
+          description: Агрегированные данные
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AggregatedData'
+        '400':
+          description: Некорректные параметры запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /telemetry/last:
+    get:
+      tags: [Телеметрия]
+      summary: Получить последнее значение по сенсору
+      description: |
+        Быстрый способ получить актуальное состояние устройства.
+        Например, текущую температуру или статус двери.
+      parameters:
+        - name: sensor_id
+          in: query
+          schema:
+            type: string
+          required: true
+      responses:
+        '200':
+          description: Последняя запись телеметрии
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelemetryPoint'
+        '404':
+          description: Данные не найдены (сенсор не отправлял данные)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+

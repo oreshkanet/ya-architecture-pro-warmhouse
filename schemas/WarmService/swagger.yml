@@ -1,0 +1,317 @@
+openapi: 3.0.3
+info:
+  title: Warm Service API
+  description: >
+    REST API для управления модулями отопления в системе "Умный дом".
+    Позволяет включать/выключать обогрев, устанавливать температуру,
+    получать текущее состояние и телеметрию с датчиков.
+  version: 1.0.0
+  contact:
+    name: Денис Сайгин
+
+servers:
+  - url: https://api.warmhouse.ru/v1
+    description: Основной сервер
+  - url: http://localhost:8084/v1
+    description: Локальное окружение
+
+tags:
+  - name: Управление отоплением
+    description: Включение, выключение, установка температуры
+  - name: Регистрация
+    description: Добавление новых модулей отопления
+  - name: Состояние
+    description: Получение статуса и данных с датчиков
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    WarmModule:
+      type: object
+      required:
+        - id
+        - location
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "w1x2y3z4-a5b6-c7d8-e9f0-g1h2i3j4k5l6"
+        name:
+          type: string
+          example: "Термостат в гостиной"
+        location:
+          type: string
+          example: "Гостиная"
+        serial_number:
+          type: string
+          example: "WH-HEAT-2025-001"
+        is_on:
+          type: boolean
+          example: true
+        current_temperature:
+          type: number
+          format: float
+          example: 21.5
+        target_temperature:
+          type: number
+          format: float
+          example: 22.0
+        status:
+          type: string
+          enum: [online, offline, error]
+          example: "online"
+        firmware_version:
+          type: string
+          nullable: true
+          example: "v1.1.0"
+        last_seen:
+          type: string
+          format: date-time
+          example: "2025-01-15T14:22:30Z"
+        is_legacy:
+          type: boolean
+          default: false
+          example: false
+
+    SetTemperatureRequest:
+      type: object
+      required:
+        - target_temperature
+      properties:
+        target_temperature:
+          type: number
+          format: float
+          minimum: 5.0
+          maximum: 30.0
+          example: 22.0
+
+    RegisterWarmModuleRequest:
+      type: object
+      required:
+        - serial_number
+        - location
+      properties:
+        serial_number:
+          type: string
+          example: "WH-HEAT-2025-001"
+        name:
+          type: string
+          example: "Термостат в гостиной"
+        location:
+          type: string
+          example: "Гостиная"
+        firmware_version:
+          type: string
+          nullable: true
+          example: "v1.0.0"
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "device_not_found"
+        message:
+          type: string
+          example: "Модуль отопления с таким ID не найден"
+        status:
+          type: integer
+          example: 404
+
+security:
+  - bearerAuth: []
+
+paths:
+  /warm:
+    get:
+      tags: [Состояние]
+      summary: Получить список всех модулей отопления
+      parameters:
+        - name: location
+          in: query
+          schema:
+            type: string
+          description: Фильтр по локации (например, "Гостиная")
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [online, offline]
+          description: Фильтр по статусу
+      responses:
+        '200':
+          description: Список модулей отопления
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WarmModule'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+        tags: [Регистрация]
+        summary: Зарегистрировать новый модуль отопления
+        description: |
+          Добавляет новый физический модуль отопления в систему.
+          Может использоваться как напрямую, так и через DeviceService.
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterWarmModuleRequest'
+        responses:
+          '201':
+            description: Модуль успешно зарегистрирован
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/WarmModule'
+          '400':
+            description: Некорректные данные
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/ErrorResponse'
+          '409':
+            description: Модуль уже зарегистрирован
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Регистрация]
+      summary: Удаление модуля отопления
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Модуль отопления удалён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WarmModule'
+
+
+  /warm/{id}:
+    get:
+      tags: [Состояние]
+      summary: Получить состояние модуля отопления
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Текущее состояние модуля
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WarmModule'
+        '404':
+          description: Модуль не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    
+    patch:
+      tags: [Управление отоплением]
+      summary: Установить целевую температуру и режим
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetTemperatureRequest'
+      responses:
+        '200':
+          description: Температура и режим установлены
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WarmModule'
+        '400':
+          description: Недопустимое значение температуры
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /warm/{id}/on:
+    post:
+      tags: [Управление отоплением]
+      summary: Включить отопление
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Отопление включено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WarmModule'
+        '400':
+          description: Нельзя включить (ошибка или offline)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /warm/{id}/off:
+    post:
+      tags: [Управление отоплением]
+      summary: Выключить отопление
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Отопление отключено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WarmModule'
+        '400':
+          description: Нельзя выключить (ошибка или offline)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'

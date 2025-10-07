@@ -24,7 +24,6 @@ package "warmservice" {
       +isLegacyModule: Boolean
       ..
       +String status (online/offline)
-      +String mode (comfort, eco, frost)
       +String toString()
     }
   }
