@@ -67,6 +67,8 @@ func main() {
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(sigCh)
 
+	warmService.StartTelemetryCollection(ctx)
+
 	// Запускаем сервер в отдельной горутине
 	go func() {
 		log.Println("Запуск HTTP-сервера на :8084")

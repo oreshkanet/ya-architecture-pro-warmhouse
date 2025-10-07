@@ -6,6 +6,7 @@ CREATE DATABASE warm;
 
 CREATE TABLE IF NOT EXISTS warm_sensors (
     id TEXT PRIMARY KEY,
+    device_id TEXT NOT NULL,
     name TEXT NOT NULL,
     location TEXT NOT NULL,
     serial_number TEXT UNIQUE NOT NULL,
@@ -20,5 +21,6 @@ CREATE TABLE IF NOT EXISTS warm_sensors (
 );
 
 -- Create indexes for common queries
+CREATE INDEX IF NOT EXISTS idx_warm_modules_device_id ON warm_modules (device_id);
 CREATE INDEX IF NOT EXISTS idx_warm_sensors_location ON warm_sensors(location);
 CREATE INDEX IF NOT EXISTS idx_warm_sensors_status ON warm_sensors(status);

@@ -21,8 +21,11 @@ func NewPublisher(conn *amqp.Connection) (*Publisher, error) {
 }
 
 func (p *Publisher) Publish(moduleID string, data map[string]interface{}) error {
-	body, _ := json.Marshal(data)
-	err := p.ch.Publish("", "telemetry", false, false, amqp.Publishing{
+	body, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	err = p.ch.Publish("", "telemetry", false, false, amqp.Publishing{
 		ContentType: "application/json",
 		Body:        body,
 	})

@@ -2,9 +2,10 @@ package domain
 
 import "time"
 
-type WarmModule struct {
+type WarmSensor struct {
 	ID              string    `json:"id"`
 	Name            string    `json:"name"`
+	DeviceID        string    `json:"device_id"`
 	Location        string    `json:"location"`
 	SerialNumber    string    `json:"serial_number"`
 	IsOn            bool      `json:"is_on"`
@@ -18,6 +19,7 @@ type WarmModule struct {
 }
 
 type RegisterRequest struct {
+	DeviceID        string  `json:"device_id"`
 	SerialNumber    string  `json:"serial_number"`
 	Name            string  `json:"name"`
 	Location        string  `json:"location"`

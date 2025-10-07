@@ -50,16 +50,24 @@ func (h *Handler) Register(c *gin.Context) {
 	}
 	module, err := h.warmService.Register(c.Request.Context(), req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusCreated, module)
 }
 
 func (h *Handler) List(c *gin.Context) {
+	deviceId := c.Query("device_id")
 	location := c.Query("location")
 	status := c.Query("status")
-	modules, err := h.warmService.GetAll(c.Request.Context(), location, status)
+
+	var err error
+	var modules []*domain.WarmSensor
+	if deviceId != "" {
+		modules, err = h.warmService.GetByDeviceID(c.Request.Context(), deviceId)
+	} else {
+		modules, err = h.warmService.GetAll(c.Request.Context(), location, status)
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

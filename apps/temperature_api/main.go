@@ -18,11 +18,11 @@ func main() {
 	isDebug, _ := strconv.ParseBool(debugStr)
 
 	// Создаём HTTP-сервер
-	httpServer := http.NewHttpService("8081", isDebug) // указываем порт с двоеточием
+	httpServer := http.NewHttpService("8081", isDebug)
 
 	// Регистрируем маршруты
 	handler := http.NewHandler()
-	handler.InitRoutes(httpServer.Engine()) // ← нужно передать *gin.Engine
+	handler.InitRoutes(httpServer.Engine())
 
 	// Канал для сигналов ОС
 	sigCh := make(chan os.Signal, 1)
