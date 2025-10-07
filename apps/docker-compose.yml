@@ -5,12 +5,12 @@ services:
     image: postgres:16-alpine
     container_name: smarthome-postgres
     environment:
-#      POSTGRES_DB: smarthome
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./smart_home/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./warm_service/init.sql:/docker-entrypoint-initdb.d/init-warm.sql:ro
     ports:
       - "5432:5432"
     healthcheck:
@@ -18,6 +18,27 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
+    networks:
+      - smarthome-network
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: rabbitmq
+      RABBITMQ_DEFAULT_PASS: rabbitmq
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - rabbitmq_log:/var/log/rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
     networks:
       - smarthome-network
@@ -52,8 +73,29 @@ services:
     networks:
       - smarthome-network
 
+  warm-service:
+    build:
+      context: ./warm_service
+      dockerfile: Dockerfile
+    container_name: warm-service
+    ports:
+      - "8084:8084"
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432
+      - DATABASE_NAME=warm
+      - RABBITMQ_URL=amqp://rabbitmq:rabbitmq@rabbitmq:5672
+      - MONOLITH_URL=http://smarthome-app:8080
+    depends_on:
+      - postgres
+      - rabbitmq
+    restart: on-failure
+    networks:
+      - smarthome-network
+
 volumes:
   postgres_data:
+  rabbitmq_data:
+  rabbitmq_log:
 
 networks:
   smarthome-network:
