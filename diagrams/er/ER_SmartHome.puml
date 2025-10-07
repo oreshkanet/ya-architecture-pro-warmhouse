@@ -1,0 +1,102 @@
+@startuml ER_Diagram_SmartHome
+'allow_mixing
+
+skinparam rectangle {
+    borderColor #2E8B57
+    BackgroundColor #F0FFF0
+}
+skinparam entity {
+    borderColor #333366
+    BackgroundColor White
+}
+
+entity User {
+  *id : UUID
+  *email : String
+  name : String
+  password_hash : String
+  created_at : DateTime
+  role : String [owner, guest]
+}
+
+entity House {
+  *id : UUID
+  *address : String
+  *user_id : UUID
+  timezone : String
+  created_at : DateTime
+}
+
+entity Location {
+  *id : UUID
+  *house_id : UUID
+  *name : String
+  type : String [room, outdoor, floor]
+  parent_location_id : UUID
+}
+
+entity DeviceType {
+  *id : UUID
+  *name : String [warm, light, door, video, universal]
+  description : String
+  is_actuator : Boolean
+}
+
+entity Device {
+  *id : UUID
+  *name : String
+  *device_type_id : UUID
+  *house_id : UUID
+  location_id : UUID
+  serial_number : String
+  status : String [online, offline, disabled]
+  firmware_version : String
+  connected_at : DateTime
+  last_seen : DateTime
+}
+
+entity Sensor {
+  *id : UUID
+  *device_id : UUID
+  *type : String
+  unit : String
+  is_actuator : Boolean
+  linked_service : String [warmservice, lightservice...]
+}
+
+entity TelemetryData {
+  *id : UUID
+  *sensor_id : UUID
+  *value : Double
+  *timestamp : DateTime
+  raw_payload : JSON
+}
+
+entity AutomationRule {
+  *id : UUID
+  *user_id : UUID
+  *name : String
+  trigger_sensor_id : UUID
+  condition : String
+  action_device_id : UUID
+  action_command : String
+  action_params : JSON
+  is_active : Boolean
+  created_at : DateTime
+}
+
+User ||--o{ House : "владеет"
+House ||--o{ Location : "содержит"
+House ||--o{ Device : "содержит"
+Location }o--o{ Device : "расположено в"
+
+Device }|--|| DeviceType : "имеет тип"
+Device ||--o{ Sensor : "содержит"
+
+Sensor ||--o{ TelemetryData : "генерирует"
+
+User ||--o{ AutomationRule : "создаёт"
+AutomationRule }o--|| Sensor : "срабатывает при" as trigger
+AutomationRule }o--|| Device : "управляет" as action
+
+@enduml
