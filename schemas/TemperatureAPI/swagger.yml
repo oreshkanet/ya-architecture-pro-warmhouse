@@ -1,0 +1,105 @@
+openapi: 3.0.3
+info:
+  title: Temperature API
+  description: |
+    API имитирует работу удалённого датчика температуры. 
+    Возвращает случайное значение температуры по указанной локации или ID сенсора.
+  version: 1.0.0
+  contact:
+    name: Denis Saygin
+    email: d.i.saygin@yandex.ru
+
+servers:
+  - url: http://localhost:8081
+    description: Локальный сервер разработки
+
+paths:
+  /temperature:
+    get:
+      summary: Получить текущую температуру
+      description: |
+        Возвращает имитированное значение температуры для указанной локации или ID сенсора.
+        Если ни `location`, ни `sensorId` не указаны, используется значение по умолчанию.
+      operationId: getTemperature
+      parameters:
+        - name: location
+          in: query
+          description: Название локации (например, "Living Room", "Kitchen")
+          required: false
+          schema:
+            type: string
+            example: "Living Room"
+        - name: sensorId
+          in: query
+          description: Уникальный идентификатор сенсора
+          required: false
+          schema:
+            type: string
+            example: "1"
+      responses:
+        '200':
+          description: Успешный ответ с данными температуры
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemperatureResponse'
+
+  /health:
+    get:
+      summary: Проверка работоспособности сервиса
+      description: Эндпоинт для health-check'а (liveness/readiness probe)
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Сервис работает
+        '500':
+          description: Сервис недоступен
+
+components:
+  schemas:
+    TemperatureResponse:
+      type: object
+      properties:
+        value:
+          type: number
+          format: float
+          example: 23.5
+          description: Значение температуры
+        unit:
+          type: string
+          example: "C"
+          description: Единица измерения (всегда "C" — градусы Цельсия)
+        timestamp:
+          type: string
+          format: date-time
+          example: "2025-04-05T12:34:56Z"
+          description: Время получения показаний
+        location:
+          type: string
+          example: "Living Room"
+          description: Локация датчика
+        status:
+          type: string
+          example: "Online"
+          description: Статус датчика
+        sensorId:
+          type: string
+          example: "1"
+          description: Идентификатор сенсора
+        sensorType:
+          type: string
+          example: "Warm"
+          description: Тип сенсора
+        description:
+          type: string
+          example: "Warm sensor - Living Room"
+          description: Описание сенсора
+      required:
+        - value
+        - unit
+        - timestamp
+        - location
+        - status
+        - sensorId
+        - sensorType
+        - description

@@ -1,0 +1,33 @@
+@startuml Component_UserService
+title SmartHome: User Service — Component Diagram
+
+!includeurl ../c4/C4_Component.puml
+
+Container(ApiGateway, "API Gateway", "Kong", "Маршрутизация запросов, аутентификация")
+
+Container_Boundary(UserDomain, "Управление пользователями") {
+  ContainerDb(UsersDatabase, "Users Database", "PostgreSQL", "Хранение:\n* Учётных данных\n* Профилей\n* Настроек приватности\n* Refresh-токенов")
+
+  Container(UserService, "User Service", "Node.js") {
+
+    Component(HttpApiLayer, "HTTP API Layer",, "REST-интерфейс:\nОбработка CORS, rate limiting")
+    Component(AuthServiceLayer, "Auth Service Layer",, "Бизнес-логика аутентификации:\n* Проверка логина/пароля\n* Генерация JWT")
+    Component(UserServiceLayer, "User Service Layer",, "Логика управления профилем:\n* Обновление имени, аватара\n* Язык интерфейса\n *Тема оформления")
+    Component(SecurityService, "Security Service",, "Безопасность:\n* Хеширование паролей\n* Валидация токенов\n* Защита от brute-force")
+    Component(RepositoryLayer, "Repository Layer",, "Доступ к PostgreSQL:\n* CRUD операции")
+
+    Rel(HttpApiLayer, AuthServiceLayer, "Аутентификация", "direct call")
+    Rel(HttpApiLayer, UserServiceLayer, "Управление профилем", "direct call")
+    
+    Rel(AuthServiceLayer, SecurityService, "Проверка пароля, генерация токена", "bcrypt, JWT")
+    Rel(AuthServiceLayer, RepositoryLayer, "Чтение/запись учётных данных", "SQL")
+    
+    Rel(UserServiceLayer, RepositoryLayer, "Чтение/обновление профиля", "SQL")
+  }
+
+  Rel(RepositoryLayer, UsersDatabase, "JDBC / TypeORM", "SQL")
+}
+
+Rel(ApiGateway, HttpApiLayer, "HTTPS", "Проксирование запросов")
+
+@enduml

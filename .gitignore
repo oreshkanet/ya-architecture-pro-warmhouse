@@ -1,1 +1,4 @@
 .DS_Store
+.vscode
+tmp
+__debug_*

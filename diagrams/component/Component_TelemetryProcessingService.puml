@@ -1,0 +1,40 @@
+@startuml Component_TelemetryService
+title SmartHome: Telemetry Processing Service — Component Diagram
+
+!includeurl ../c4/C4_Component.puml
+
+
+Container(ApiGateway, "API Gateway", "Kong", "Единая точка входа:\n* Маршрутизация запросов\n* Аутентификация через JWT\n* Rate limiting, CORS")
+
+
+Container_Boundary(AutomationDomain, "Автоматизация") {
+  Container(AutomationService, "Automation Service", "Go", "Обработка сценариев на основе событий")
+}
+
+Container_Boundary(TelemetryDomain, "Сбор и анализ телеметрии") {
+  ContainerQueue(TelemetryQueue, "Telemetry Queue", "RabbitMQ", "Буферизация показателей телеметрии от устройств")
+  ContainerDb(TelemetryDatabase, "Telemetry Database", "ClickHouse", "Хранение временных рядов:\n* Температура, влажность\n* Состояние дверей, света\n* События движения")
+
+  Container(TelemetryService, "Telemetry Processing Service", "Go") {
+
+    Component(MessageConsumer, "Message Consumer",, "* Потребитель сообщений из очереди\n* Парсинг входящих данных")
+    Component(ValidationFilter, "Validation & Filter",, "Проверка данных:\n* Формат, диапазон значений\n* Отбрасывание битых/дублированных записей")
+    Component(AggregationEngine, "Aggregation Engine",, "Агрегация данных:\n* Средние значения\n* Пики\n* Детекция аномалий")
+    Component(PersistenceLayer, "Persistence Layer",, "Запись в ClickHouse:\n* Пакетная вставка\n* Управление партициями\n* Оптимизация запросов")
+    Component(HttpApiLayer, "HTTP API Layer",, "REST-интерфейс для фронтенда и других сервисов:\n* Получение истории телеметрии\n* Агрегированные данные")
+    
+    Rel(MessageConsumer, ValidationFilter, "Передача raw-показаний", "in-memory")
+    Rel(ValidationFilter, AggregationEngine, "Фильтрованные данные", "DTO")
+    Rel(AggregationEngine, PersistenceLayer, "Агрегированные данные", "batch insert")
+    Rel(PersistenceLayer, TelemetryDatabase, "Запись временных рядов", "HTTP / ClickHouse Native")
+    
+    Rel(AggregationEngine, PersistenceLayer, "Запрос истории", "sync call")
+    Rel(HttpApiLayer, AggregationEngine, "Запрос агрегаций", "sync call")  
+  }
+}
+
+Rel(TelemetryQueue, MessageConsumer, "AMQP")
+Rel(TelemetryQueue, AutomationService, "AMQP")
+Rel(ApiGateway, HttpApiLayer, "Получение данных телеметрии", "HTTPS")
+
+@enduml

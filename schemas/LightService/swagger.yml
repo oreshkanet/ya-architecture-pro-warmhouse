@@ -1,0 +1,323 @@
+openapi: 3.0.3
+info:
+  title: Light Service API
+  description: >
+    REST API для управления модулями освещения в системе "Умный дом".
+    Позволяет включать/выключать свет, управлять яркостью и цветом,
+    регистрировать новые устройства и получать текущее состояние.
+  version: 1.0.0
+  contact:
+    name: Денис Сайгин
+
+servers:
+  - url: https://api.warmhouse.ru/v1  
+    description: Основной сервер
+  - url: http://localhost:8085/v1
+    description: Локальное окружение
+
+tags:
+  - name: Управление освещением
+    description: Включение, выключение, регулировка яркости и цвета
+  - name: Регистрация
+    description: Добавление новых модулей освещения
+  - name: Состояние
+    description: Получение статуса и данных о свете
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    LightModule:
+      type: object
+      required:
+        - id
+        - location
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "l1m2n3o4-p5q6-r7s8-t9u0-v1w2x3y4z5a6"
+        name:
+          type: string
+          example: "Свет в гостиной"
+        location:
+          type: string
+          example: "Гостиная"
+        serial_number:
+          type: string
+          example: "WH-LIGHT-2025-002"
+        is_on:
+          type: boolean
+          example: true
+        brightness:
+          type: integer
+          minimum: 0
+          maximum: 100
+          example: 80
+        color:
+          type: string
+          pattern: "^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$"
+          example: "#FFD700"
+          nullable: true
+        mode:
+          type: string
+          enum: [normal, night, party, reading]
+          example: "normal"
+        status:
+          type: string
+          enum: [online, offline, error]
+          example: "online"
+        firmware_version:
+          type: string
+          nullable: true
+          example: "v1.0.0"
+        last_seen:
+          type: string
+          format: date-time
+          example: "2025-01-15T14:25:00Z"
+
+    UpdateLightRequest:
+      type: object
+      properties:
+        brightness:
+          type: integer
+          minimum: 0
+          maximum: 100
+          example: 75
+        color:
+          type: string
+          pattern: "^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$"
+          example: "#FFFFFF"
+          nullable: true
+        mode:
+          type: string
+          enum: [normal, night, party, reading]
+          example: "night"
+
+    RegisterLightModuleRequest:
+      type: object
+      required:
+        - serial_number
+        - location
+      properties:
+        serial_number:
+          type: string
+          example: "WH-LIGHT-2025-002"
+        name:
+          type: string
+          example: "Свет в гостиной"
+        location:
+          type: string
+          example: "Гостиная"
+        firmware_version:
+          type: string
+          nullable: true
+          example: "v1.0.0"
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "device_not_found"
+        message:
+          type: string
+          example: "Модуль освещения с таким ID не найден"
+        status:
+          type: integer
+          example: 404
+
+security:
+  - bearerAuth: []
+
+paths:
+  /lights:
+    get:
+      tags: [Состояние]
+      summary: Получить список всех модулей освещения
+      parameters:
+        - name: location
+          in: query
+          schema:
+            type: string
+          description: Фильтр по локации (например, "Кухня")
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [online, offline]
+          description: Фильтр по статусу
+      responses:
+        '200':
+          description: Список модулей освещения
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LightModule'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags: [Регистрация]
+      summary: Зарегистрировать новый модуль освещения
+      description: |
+        Добавляет новый физический модуль освещения в систему.
+        Может использоваться как напрямую, так и через DeviceService.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterLightModuleRequest'
+      responses:
+        '201':
+          description: Модуль успешно зарегистрирован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LightModule'
+        '400':
+          description: Некорректные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Модуль уже зарегистрирован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Регистрация]
+      summary: Удалить модуль освещения
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Модуль освещения удалён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LightModule'
+
+  /lights/{id}:
+    get:
+      tags: [Состояние]
+      summary: Получить состояние модуля освещения
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Текущее состояние модуля
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LightModule'
+        '404':
+          description: Модуль не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    patch:
+      tags: [Управление освещением]
+      summary: Обновить параметры освещения (яркость, цвет, режим)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateLightRequest'
+      responses:
+        '200':
+          description: Параметры освещения обновлены
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LightModule'
+        '400':
+          description: Недопустимые значения (например, яркость > 100)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /lights/{id}/on:
+    post:
+      tags: [Управление освещением]
+      summary: Включить свет
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Свет включён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LightModule'
+        '400':
+          description: Нельзя включить (устройство offline)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /lights/{id}/off:
+    post:
+      tags: [Управление освещением]
+      summary: Выключить свет
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Свет выключен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LightModule'
+        '400':
+          description: Нельзя выключить (ошибка или offline)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'

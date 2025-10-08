@@ -1,0 +1,386 @@
+openapi: 3.0.3
+info:
+  title: Automation Service API
+  description: >
+    REST API для управления пользовательскими сценариями умного дома.
+    Позволяет создавать правила вида "Если температура < 18°C → включить отопление",
+    управлять запуском по расписанию и просматривать историю выполнения.
+  version: 1.0.0
+  contact:
+    name: Денис Сайгин
+
+servers:
+  - url: https://api.warmhouse.ru/v1
+    description: Основной сервер
+  - url: http://localhost:8083/v1
+    description: Локальное окружение
+
+tags:
+  - name: Сценарии
+    description: Создание, редактирование и удаление правил автоматизации
+  - name: Запуск
+    description: Ручной запуск и управление активностью
+  - name: Мониторинг
+    description: История выполнения и статус правил
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    AutomationRule:
+      type: object
+      required:
+        - id
+        - name
+        - trigger_type
+        - action_device_id
+        - action_command
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "r1s2t3u4-v5w6-x7y8-z9a0-b1c2d3e4f5g6"
+        user_id:
+          type: string
+          format: uuid
+          example: "u1v2w3x4-y5z6-a7b8-c9d0-e1f2g3h4i5j6"
+        name:
+          type: string
+          example: "Включить свет при движении"
+        description:
+          type: string
+          nullable: true
+          example: "Автоматически включает свет в коридоре при обнаружении движения после 18:00"
+        is_active:
+          type: boolean
+          default: true
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-01-12T10:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2025-01-15T14:30:00Z"
+
+        # Триггер
+        trigger_type:
+          type: string
+          enum: [sensor_event, schedule, manual]
+          example: "sensor_event"
+        trigger_sensor_id:
+          type: string
+          format: uuid
+          nullable: true
+          example: "s1t2u3v4-w5x6-y7z8-a9b0-c1d2e3f4g5h6"
+        trigger_condition:
+          type: object
+          nullable: true
+          additionalProperties: true
+          example:
+            field: "temperature"
+            operator: "<"
+            value: 18.0
+        trigger_cron:
+          type: string
+          nullable: true
+          example: "0 7 * * *"  # Каждый день в 7:00
+
+        # Действие
+        action_device_id:
+          type: string
+          format: uuid
+          example: "d1e2f3g4-h5i6-j7k8-l9m0-n1o2p3q4r5s6"
+        action_command:
+          type: string
+          example: "turnOn"
+        action_params:
+          type: object
+          nullable: true
+          additionalProperties: true
+          example:
+            brightness: 100
+            color: "#FFFFFF"
+
+    RuleExecutionLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        rule_id:
+          type: string
+          format: uuid
+        triggered_at:
+          type: string
+          format: date-time
+        trigger_event:
+          type: object
+          additionalProperties: true
+        action_status:
+          type: string
+          enum: [success, failed, timeout]
+        error_message:
+          type: string
+          nullable: true
+        executed_at:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "rule_not_found"
+        message:
+          type: string
+          example: "Сценарий с таким ID не найден"
+        status:
+          type: integer
+          example: 404
+
+security:
+  - bearerAuth: []
+
+paths:
+  /rules:
+    get:
+      tags: [Сценарии]
+      summary: Получить список сценариев пользователя
+      parameters:
+        - name: is_active
+          in: query
+          schema:
+            type: boolean
+          description: Фильтр по активности
+        - name: trigger_type
+          in: query
+          schema:
+            type: string
+            enum: [sensor_event, schedule, manual]
+          description: Тип триггера
+      responses:
+        '200':
+          description: Список сценариев
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AutomationRule'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags: [Сценарии]
+      summary: Создать новый сценарий
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutomationRule'
+      responses:
+        '201':
+          description: Сценарий успешно создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutomationRule'
+        '400':
+          description: Некорректные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /rules/{id}:
+    get:
+      tags: [Сценарии]
+      summary: Получить сценарий по ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Данные сценария
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutomationRule'
+        '404':
+          description: Сценарий не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    patch:
+      tags: [Сценарии]
+      summary: Обновить сценарий
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutomationRule'
+      responses:
+        '200':
+          description: Сценарий обновлён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutomationRule'
+        '404':
+          description: Сценарий не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Сценарии]
+      summary: Удалить сценарий
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Сценарий успешно удалён
+        '404':
+          description: Сценарий не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /rules/{id}/activate:
+    post:
+      tags: [Запуск]
+      summary: Активировать сценарий
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Сценарий активирован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutomationRule'
+        '404':
+          description: Сценарий не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /rules/{id}/deactivate:
+    post:
+      tags: [Запуск]
+      summary: Деактивировать сценарий
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Сценарий деактивирован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutomationRule'
+
+  /rules/{id}/execute:
+    post:
+      tags: [Запуск]
+      summary: Выполнить сценарий вручную
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Сценарий выполнен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "executed"
+                  rule_id:
+                    type: string
+                    format: uuid
+                  executed_at:
+                    type: string
+                    format: date-time
+        '400':
+          description: Сценарий неактивен или недоступен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /rules/{id}/history:
+    get:
+      tags: [Мониторинг]
+      summary: История выполнения сценария
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: История запусков
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RuleExecutionLog'

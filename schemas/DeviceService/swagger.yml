@@ -1,0 +1,501 @@
+openapi: 3.0.3
+info:
+  title: Device Service API
+  description: >
+    REST API для управления устройствами умного дома.
+    Позволяет регистрировать, настраивать и мониторить устройства,
+    а также получать их статус для построения интерфейса и сценариев автоматизации.
+  version: 1.0.0
+  contact:
+    name: Денис Сайгин
+
+servers:
+  - url: https://api.warmhouse.ru/v1
+    description: Основной сервер
+  - url: http://localhost:8082/v1
+    description: Локальное окружение
+
+tags:
+  - name: Устройства
+    description: Регистрация, удаление, статус устройств
+  - name: Локации
+    description: Управление комнатами и зонами
+  - name: Состояние
+    description: Получение текущего состояния устройств
+  - name: Интеграция
+    description: Эндпоинты для других сервисов (например, Automation)
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Device:
+      type: object
+      required:
+        - id
+        - name
+        - device_type
+        - location_id
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "d5e6f7g8-h9i0-j1k2-l3m4-n5o6p7q8r9s0"
+        name:
+          type: string
+          example: "Термостат в гостиной"
+        device_type:
+          type: string
+          enum: [warm, light, door, video, universal]
+          example: "warm"
+        serial_number:
+          type: string
+          nullable: true
+          example: "WH-HC-2025-001"
+        location_id:
+          type: string
+          format: uuid
+          example: "l1m2n3o4-p5q6-r7s8-t9u0-v1w2x3y4z5a6"
+        status:
+          type: string
+          enum: [online, offline, disabled]
+          example: "online"
+        firmware_version:
+          type: string
+          nullable: true
+          example: "v1.2.3"
+        connected_at:
+          type: string
+          format: date-time
+          example: "2025-01-10T08:45:00Z"
+        last_seen:
+          type: string
+          format: date-time
+          example: "2025-01-15T14:22:30Z"
+
+    Location:
+      type: object
+      required:
+        - id
+        - name
+        - house_id
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "l1m2n3o4-p5q6-r7s8-t9u0-v1w2x3y4z5a6"
+        house_id:
+          type: string
+          format: uuid
+          example: "h1a2b3c4-d5e6-f7g8-h9i0-j1k2l3m4n5o6"
+        name:
+          type: string
+          example: "Гостиная"
+        type:
+          type: string
+          enum: [room, outdoor, floor]
+          example: "room"
+        parent_location_id:
+          type: string
+          format: uuid
+          nullable: true
+          example: "l9z8y7x6-w5v4-u3t2-s1r0-q9p8o7n6m5l4"
+
+    DeviceStatus:
+      type: object
+      properties:
+        device_id:
+          type: string
+          format: uuid
+        is_online:
+          type: boolean
+        last_seen:
+          type: string
+          format: date-time
+        sensor_data:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              value:
+                oneOf:
+                  - type: number
+                  - type: boolean
+              unit:
+                type: string
+                nullable: true
+          example:
+            temperature:
+              value: 21.5
+              unit: "°C"
+            brightness:
+              value: 80
+              unit: "%"
+            door_status:
+              value: false
+              unit: null
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "device_not_found"
+        message:
+          type: string
+          example: "Устройство с таким ID не найдено"
+        status:
+          type: integer
+          example: 404
+
+security:
+  - bearerAuth: []
+
+paths:
+  /devices:
+    get:
+      tags: [Устройства]
+      summary: Получить список устройств пользователя
+      description: Возвращает все устройства, доступные текущему пользователю
+      parameters:
+        - name: location_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Фильтр по локации
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [warm, light, door, video, universal]
+          description: Фильтр по типу устройства
+      responses:
+        '200':
+          description: Список устройств
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Device'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags: [Устройства]
+      summary: Зарегистрировать новое устройство
+      description: Добавляет устройство в систему и привязывает к пользователю
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, device_type, location_id]
+              properties:
+                name:
+                  type: string
+                device_type:
+                  type: string
+                  enum: [warm, light, door, video, universal]
+                serial_number:
+                  type: string
+                location_id:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Устройство успешно добавлено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '400':
+          description: Некорректные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /devices/{id}/command:
+    post:
+      tags: [Устройства]
+      summary: Команда устройству
+      description: Выполнить одну из доступных команд устройству
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, command]
+              properties:
+                user_id:
+                  type: string
+                  format: uuid
+                command:
+                  type: string
+      responses:
+        '200':
+          description: Команда выполнена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '400':
+          description: Некорректные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              
+  /devices/{id}/values:
+    post:
+      tags: [Устройства]
+      summary: Установка параметров
+      description: Установить параметры устройства
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, values]
+              properties:
+                user_id:
+                  type: string
+                  format: uuid
+                values:
+                  type: object
+                  properties:
+                    target_temperature:
+                      type: number
+                      format: float
+                      example: 22.0
+      responses:
+        '200':
+          description: Команда выполнена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '400':
+          description: Некорректные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /devices/{id}:
+    get:
+      tags: [Устройства]
+      summary: Получить информацию об устройстве
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Данные устройства
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '404':
+          description: Устройство не найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    patch:
+      tags: [Устройства]
+      summary: Обновить устройство
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                location_id:
+                  type: string
+                  format: uuid
+                status:
+                  type: string
+                  enum: [online, offline, disabled]
+      responses:
+        '200':
+          description: Устройство обновлено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '404':
+          description: Устройство не найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Устройства]
+      summary: Удалить устройство
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Устройство успешно удалено (нет содержимого)
+        '404':
+          description: Устройство не найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /locations:
+    get:
+      tags: [Локации]
+      summary: Получить все локации пользователя
+      responses:
+        '200':
+          description: Список локаций
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Location'
+
+    post:
+      tags: [Локации]
+      summary: Создать новую локацию
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Location'
+      responses:
+        '201':
+          description: Локация создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+
+  /locations/{id}:
+    put:
+      tags: [Локации]
+      summary: Обновить локацию
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Location'
+      responses:
+        '200':
+          description: Локация обновлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+
+    delete:
+      tags: [Локации]
+      summary: Удалить локацию
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Локация удалена
+
+  /devices/{id}/status:
+    get:
+      tags: [Состояние]
+      summary: Получить текущий статус устройства
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Текущее состояние устройства
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceStatus'
+        '503':
+          description: Устройство недоступно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /integration/devices:
+    get:
+      tags: [Интеграция]
+      summary: Получить список устройств (для AutomationService)
+      description: |
+        Эндпоинт для внутреннего использования другими микросервисами.
+        Возвращает список всех активных устройств с типами и ID.
+      responses:
+        '200':
+          description: Список устройств для сценариев
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    name:
+                      type: string
+                    device_type:
+                      type: string
+                    location_id:
+                      type: string
+                      format: uuid

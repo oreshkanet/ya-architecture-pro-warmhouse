@@ -1,0 +1,439 @@
+openapi: 3.0.3
+info:
+  title: Video Service API
+  description:
+    REST API для управления модулями видеонаблюдения в системе "Умный дом".
+    Позволяет получать видео в реальном времени, управлять записью,
+    настраивать детекцию движения и просматривать архив.
+  version: 1.0.0
+  contact:
+    name: Денис Сайгин
+
+servers:
+  - url: https://api.warmhouse.ru/v1      
+    description: Основной сервер
+  - url: http://localhost:8088/v1
+    description: Локальное окружение
+
+tags:
+  - name: Управление
+    description: Получение потока, управление записью и детекцией
+  - name: Регистрация
+    description: Добавление новых камер
+  - name: Архив и события
+    description: Просмотр записи и событий (движение)
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    CameraModule:
+      type: object
+      required:
+        - id
+        - location
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "c1d2e3f4-g5h6-i7j8-k9l0-m1n2o3p4q5r6"
+        name:
+          type: string
+          example: "Камера у входа"
+        location:
+          type: string
+          example: "Подъезд"
+        serial_number:
+          type: string
+          example: "WH-CAM-2025-005"
+        status:
+          type: string
+          enum: [online, offline, error]
+          example: "online"
+        stream_status:
+          type: string
+          enum: [active, inactive, buffering]
+          example: "active"
+        is_recording:
+          type: boolean
+          example: true
+        motion_detection_enabled:
+          type: boolean
+          example: true
+        resolution:
+          type: string
+          example: "1080p"
+        rtsp_url:
+          type: string
+          format: uri
+          writeOnly: true
+          example: "rtsp://admin:pass@192.168.1.100:554/stream1"
+        firmware_version:
+          type: string
+          nullable: true
+          example: "v2.1.0"
+        last_seen:
+          type: string
+          format: date-time
+          example: "2025-01-15T14:40:00Z"
+
+    UpdateCameraRequest:
+      type: object
+      properties:
+        motion_detection_enabled:
+          type: boolean
+          example: false
+        is_recording:
+          type: boolean
+          example: true
+        recording_duration:
+          type: integer
+          minimum: 10
+          maximum: 3600
+          description: Длительность записи после события (в секундах)
+          example: 300
+
+    RegisterCameraRequest:
+      type: object
+      required:
+        - serial_number
+        - location
+        - rtsp_url
+      properties:
+        serial_number:
+          type: string
+          example: "WH-CAM-2025-005"
+        name:
+          type: string
+          example: "Камера у входа"
+        location:
+          type: string
+          example: "Подъезд"
+        rtsp_url:
+          type: string
+          format: uri
+          example: "rtsp://admin:pass@192.168.1.100:554/stream1"
+        firmware_version:
+          type: string
+          nullable: true
+          example: "v2.1.0"
+
+    RecordingEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "e1f2g3h4-i5j6-k7l8-m9n0-o1p2q3r4s5t6"
+        camera_id:
+          type: string
+          format: uuid
+        start_time:
+          type: string
+          format: date-time
+          example: "2025-01-15T10:00:00Z"
+        end_time:
+          type: string
+          format: date-time
+          example: "2025-01-15T10:05:00Z"
+        duration:
+          type: integer
+          example: 300
+        reason:
+          type: string
+          enum: [motion, manual, schedule]
+          example: "motion"
+        video_url:
+          type: string
+          format: uri
+          example: "https://storage.warmhouse.ru/recordings/e1f2g3h4...mp4"
+        thumbnail_url:
+          type: string
+          format: uri
+          example: "https://storage.warmhouse.ru/thumbnails/e1f2g3h4...jpg"
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "camera_not_found"
+        message:
+          type: string
+          example: "Камера с таким ID не найдена"
+        status:
+          type: integer
+          example: 404
+
+security:
+  - bearerAuth: []
+
+paths:
+  /video:
+    get:
+      tags: [Архив и события]
+      summary: Получить список всех камер
+      parameters:
+        - name: location
+          in: query
+          schema:
+            type: string
+          description: Фильтр по локации (например, "Подъезд")
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [online, offline]
+          description: Фильтр по статусу подключения
+      responses:
+        '200':
+          description: Список камер
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CameraModule'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags: [Регистрация]
+      summary: Зарегистрировать новую камеру
+      description: |
+        Добавляет новую IP-камеру в систему по RTSP-ссылке.
+        Может использоваться как напрямую, так и через DeviceService.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterCameraRequest'
+      responses:
+        '201':
+          description: Камера успешно зарегистрирована
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CameraModule'
+        '400':
+          description: Некорректные данные или недоступный RTSP
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Камера уже зарегистрирована
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Регистрация]
+      summary: Удалить камеру
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Камера удалена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CameraModule'
+
+  /video/{id}:
+    get:
+      tags: [Архив и события]
+      summary: Получить состояние камеры
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Текущее состояние камеры
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CameraModule'
+        '404':
+          description: Камера не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    patch:
+      tags: [Управление]
+      summary: Обновить настройки камеры (детекция, запись)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCameraRequest'
+      responses:
+        '200':
+          description: Настройки камеры обновлены
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CameraModule'
+        '400':
+          description: Недопустимые параметры
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /video/{id}/stream:
+    get:
+      tags: [Управление]
+      summary: Получить ссылку на видеопоток
+      description: |
+        Возвращает URL для просмотра HLS-потока (через HTTP).
+        Для браузеров рекомендуется использовать hls.js.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Ссылка на поток
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stream_url:
+                    type: string
+                    format: uri
+                    example: "https://api.warmhouse.ru/v1/video/c1d2e3f4.../hls/stream.m3u8"
+                  type:
+                    type: string
+                    example: "hls"
+                  status:
+                    type: string
+                    example: "active"
+        '404':
+          description: Камера не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Камера недоступна
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /video/{id}/start-recording:
+    post:
+      tags: [Управление]
+      summary: Запустить запись вручную
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Запись запущена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CameraModule'
+        '400':
+          description: Нельзя начать запись
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /video/{id}/stop-recording:
+    post:
+      tags: [Управление]
+      summary: Остановить запись
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Запись остановлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CameraModule'
+
+  /video/{id}/recordings:
+    get:
+      tags: [Архив и события]
+      summary: Получить список записей камеры
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Начало периода
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Конец периода
+        - name: reason
+          in: query
+          schema:
+            type: string
+            enum: [motion, manual, schedule]
+          description: Фильтр по причине записи
+      responses:
+        '200':
+          description: Список записей
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RecordingEvent'

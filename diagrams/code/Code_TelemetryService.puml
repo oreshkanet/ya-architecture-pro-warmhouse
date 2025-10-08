@@ -1,0 +1,162 @@
+@startuml Class_TelemetryService
+title SmartHome: Telemetry Service — Class Diagram
+
+' === Разрешаем смешивание элементов (UML + C4) ===
+'allow_mixing
+
+' === Настройки стиля ===
+skinparam class {
+    BorderColor #333366
+    ArrowColor #006699
+    AttributeIconVisibility hidden
+}
+
+skinparam databaseBackgroundColor #f0f8ff
+skinparam cloudBackgroundColor #ffe4b5
+
+' === Пакеты ===
+package "telemetryservice" {
+  package "model" {
+    class TelemetryEvent {
+      +String eventId
+      +String deviceId
+      +String sensorId
+      +String type
+      +Double value
+      +Long timestamp
+      +String unit
+      ..
+      +String toString()
+    }
+
+    class AggregatedData {
+      +String metric
+      +String deviceId
+      +Double value
+      +Long fromTime
+      +Long toTime
+      +String interval
+      ..
+      +String getKey()
+    }
+
+    class ValidationError {
+      +String errorType
+      +TelemetryEvent originalEvent
+      +Long timestamp
+      +String severity
+    }
+  }
+
+  package "delivery" {
+    class TelemetryHandler {
+      -TelemetryUseCase useCase
+      ..
+      +getRawHistory(Request req): List<TelemetryEvent>
+      +getAggregatedData(Request req): List<AggregatedData>
+      +getLastValue(String sensorId): TelemetryEvent
+    }
+
+    class MessageConsumer {
+      -AMQPChannel channel
+      -String queueName = "telemetry.raw"
+      -TelemetryUseCase useCase
+      ..
+      +StartConsuming()
+      -handleDelivery(delivery: Delivery)
+      -parseJsonToEvent(data: Bytes): (TelemetryEvent, Error)
+    }
+  }
+
+  package "service" {
+    class TelemetryUseCase {
+      -ValidationFilter validator
+      -AggregationEngine aggregator
+      -PersistenceService persistence
+      ..
+      +ProcessIncomingEvent(raw: Map<String, Object>): (TelemetryEvent, Error)
+      +GetRawData(deviceId: String, from: Long, to: Long): Stream<TelemetryEvent>
+      +GetAggregated(metric: String, deviceId: String, interval: String): AggregatedData
+      +StoreEvent(event: TelemetryEvent): Error
+    }
+
+    class ValidationFilter {
+      -List<ValidationRule> rules
+      ..
+      +Validate(event: TelemetryEvent): (TelemetryEvent, List<ValidationError>)
+      +isInRange(value: Double, min: Double, max: Double): Boolean
+      +isValidType(type: String): Boolean
+    }
+
+    class AggregationEngine {
+      -Map<String, AggregationStrategy> strategies
+      ..
+      +Aggregate(stream: Stream<TelemetryEvent>, interval: String): AggregatedData
+      +ComputeAverage(values: List<Double>): Double
+      +DetectPeaks(values: List<Double>): List<Long>
+      +CountEvents(events: List<TelemetryEvent>): Integer
+    }
+
+    interface AggregationStrategy {
+      +AggregatedData aggregate(Stream<TelemetryEvent> stream)
+    }
+  }
+
+  package "persistence" {
+    interface TelemetryRepositoryInterface {
+      +Save(event: TelemetryEvent): Error
+      +BatchSave(events: List<TelemetryEvent>): Error
+      +FindRaw(deviceId: String, from: Long, to: Long): Stream<TelemetryEvent>
+      +FindAggregated(query: AggregationQuery): List<AggregatedData>
+    }
+
+    class TelemetryRepository {
+      -ClickHouseClient client
+      ..
+      +Save(event: TelemetryEvent): Error
+      +BatchSave(events: List<TelemetryEvent>): Error
+      +FindRaw(deviceId: String, from: Long, to: Long): Stream<TelemetryEvent>
+      +FindAggregated(query: AggregationQuery): List<AggregatedData>
+      -buildSQL(query: AggregationQuery): String
+    }
+
+    class AggregationQuery {
+      +String metric
+      +String deviceId
+      +String groupByInterval
+      +Long from
+      +Long to
+      +String function (avg, count, max)
+    }
+  }
+}
+
+TelemetryHandler --> TelemetryUseCase : uses
+
+TelemetryUseCase --> ValidationFilter : validates input
+TelemetryUseCase --> AggregationEngine : requests aggregations
+TelemetryUseCase --> TelemetryRepositoryInterface : stores/fetches data
+
+ValidationFilter --> ValidationError : creates on failure
+
+AggregationEngine --> AggregationStrategy : polymorphic processing
+
+TelemetryRepository --> TelemetryRepositoryInterface : implements
+TelemetryRepository --> clickhouse : HTTP / Native Protocol
+
+MessageConsumer --> TelemetryUseCase : passes parsed events
+MessageConsumer --> rabbitmq : consumes from AMQP
+
+api_gateway --> TelemetryHandler : GET
+device_service --> TelemetryHandler : запрос последнего значения
+automation_service --> TelemetryUseCase : подписка на события (через очередь)
+
+legend right
+  <b>Особенности:</b>
+  • Обработка потока телеметрии в реальном времени
+  • Агрегация для дашбордов
+  • Интеграция с автоматизацией
+  • Хранение во временной БД (ClickHouse)
+end legend
+
+@enduml

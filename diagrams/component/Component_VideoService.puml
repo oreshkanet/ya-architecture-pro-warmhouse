@@ -1,0 +1,49 @@
+@startuml Component_VideoService
+title SmartHome: Video Service — Component Diagram
+
+!includeurl ../c4/C4_Component.puml
+
+System_Ext(VideoSensor, "Video Sensor", "Модули видеонаблюдения", "Протоколы: RTSP, HTTP Streaming")
+
+Container_Boundary(DeviceDomain, "Управление устройствами пользователей") {
+  Container(DeviceService, "Device Service", "Go", "Централизованное управление:\n - Регистрация камер\n - Привязка к пользователю\n - Отображение статуса")
+}
+
+Container_Boundary(TelemetryDomain, "Сбор и анализ телеметрии") {
+  ContainerQueue(TelemetryQueue, "Telemetry Queue", "RabbitMQ", "Буферизация и доставка показателей телеметрии")
+}
+
+Container_Boundary(VideoSensorDomain, "Видеонаблюдение") {
+  ContainerDb(VideoDatabase, "Video Metadata DB", "PostgreSQL", "Хранение метаданных")
+  ContainerDb(VideoStorage, "Video Storage", "S3 / MinIO", "Хранение видеофрагментов")
+
+  Container(VideoService, "Video Service", "Go", "Обработка видео") {
+
+    Component(MotionDetector, "Motion Detector", "Анализ кадров на наличие движения")
+    Component(EventProcessor, "Event Processor", "Обработка событий:\n - Фиксация факта движения\n - Запуск записи\n - Отправка уведомлений")
+    Component(SensorService, "Sensor Service", "Логика обработки команд:\n - обработка команд управления модулями\n - обработка потока телеметрии")
+    Component(RecordingManager, "Recording Manager", "Управление записью:\n - Старт/стоп записи\n - Конвертация в HLS\n - Сохранение в S3")
+    Component(HttpApiLayer, "HTTP API Layer", "REST-интерфейс для:\n - Получения ссылки на поток\n - Управления настройками камеры\n - Просмотра архива")
+    Component(RepositoryLayer, "Repository Layer", "Доступ к метаданным камер и событий")
+    Component(SensorConnector, "Sensor Connector", "Коннектор подключения к модулям:\n - отправка команд\n- Получение RTSP/HLS потока от камеры \n - получение телеметрии")
+    ComponentQueue(VideoTelemetryQueue, "Video Telemetry Queue", "Локальная очередь событий перед отправкой в шину")
+
+    ' Внутренние связи
+    Rel(HttpApiLayer, SensorService, "Передача на обработку запросов")
+    Rel(SensorService, RepositoryLayer, "Чтение/запись сущностей")
+    Rel(SensorService, MotionDetector, "Передача видеокадров", "in-memory")
+    Rel(SensorService, SensorConnector, "Команды к модулям, Получение видеопотока")
+    Rel(MotionDetector, EventProcessor, "Обнаружено движение", "event")
+    Rel(EventProcessor, RecordingManager, "Запуск/остановка записи", "command")
+    Rel(EventProcessor, VideoTelemetryQueue, "Добавление события телеметрии", "queue")
+    Rel(EventProcessor, RepositoryLayer, "Сохранение метаданных события", "SQL")
+    Rel(RecordingManager, VideoStorage, "Сохранение видеофрагментов", "S3 API")
+  }
+}
+
+Rel(DeviceService, HttpApiLayer, "Запрос статуса камеры,\nуправление привязкой", "HTTP")
+Rel(RepositoryLayer, VideoDatabase, "CRUD операции с метаданными", "JDBC/SQL")
+Rel(VideoTelemetryQueue, TelemetryQueue, "Отправка событий телеметрии", "AMQP")
+Rel(SensorConnector, VideoSensor, "Отправка команд\n, Получение RTSP-потока", "RTSP")
+
+@enduml

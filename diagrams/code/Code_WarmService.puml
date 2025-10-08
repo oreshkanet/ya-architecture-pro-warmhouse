@@ -1,0 +1,147 @@
+@startuml Class_WarmService
+title SmartHome: Warm Service — Class Diagram
+
+'allow_mixing
+
+' === Настройки стиля ===
+skinparam class {
+    'BackgroundColor White
+    BorderColor #333366
+    ArrowColor #006699
+    AttributeIconVisibility hidden
+}
+
+' === Пакеты ===
+package "warmservice" {
+  package "model" {
+    class WarmSensor {
+      +String id
+      +String location
+      +Float currentTemperature
+      +Float targetTemperature
+      +Boolean isOn
+      +Long lastSeen
+      +isLegacyModule: Boolean
+      ..
+      +String status (online/offline)
+      +String toString()
+    }
+  }
+
+  package "delivery" {
+    class WarmHandler {
+      -WarmUseCase useCase
+      ..
+      +createModule(Request req)
+      +turnOn(Response res)
+      +turnOff(Response res)
+      +setTargetTemperature(Request req)
+      +getStatus(Response res)
+    }
+  }
+
+  package "service" {
+    class WarmUseCase {
+      -WarmRepository repository
+      -SensorConnector sensorConnector
+      -SmartHomeMonolithConnector monolithConnector
+      -TelemetryProducer telemetryProducer
+      ..
+      +TurnOn(moduleId: String): Error
+      +TurnOff(moduleId: String): Error
+      +SetTargetTemperature(moduleId: String, temp: Float): Error
+      +GetStatus(moduleId: String): (WarmSensor, Error)
+      -validateTemperature(temp: Float): Boolean
+      -isLegacyModule(moduleId: String): Boolean
+    }
+  }
+
+  package "repository" {
+    interface WarmRepositoryInterface {
+      +Save(module: WarmSensor): Error
+      +FindById(id: String): (WarmSensor, Error)
+      +Update(module: WarmSensor): Error
+      +Delete(id: String): Error
+      +ListByUserId(userId: String): List<WarmSensor>
+    }
+
+    class WarmRepository {
+      -DBConnection db
+      ..
+      +Save(module: WarmSensor): Error
+      +FindById(id: String): (WarmSensor, Error)
+      +Update(module: WarmSensor): Error
+      +Delete(id: String): Error
+      +ListByUserId(userId: String): List<WarmSensor>
+    }
+  }
+
+  package "connector" {
+    class SensorConnector {
+      -MQTTClient mqttClient
+      -HTTPClient httpClient
+      ..
+      +SendCommand(moduleId: String, command: Command): Error
+      +RequestTelemetry(moduleId: String): (Telemetry, Error)
+    }
+
+    class SmartHomeMonolithConnector {
+      -HTTPClient httpClient
+      -String monolithBaseUrl
+      ..
+      +ControlLegacyModule(moduleId: String, action: String): (Response, Error)
+      +IsLegacy(moduleId: String): Boolean
+    }
+
+    class TelemetryProducer {
+      -AMQPChannel channel
+      -String exchangeName = "telemetry.raw"
+      ..
+      +Send(event: TelemetryEvent): Error
+    }
+
+    class TelemetryEvent {
+      +String eventId
+      +String eventType (e.g. warm.status.changed)
+      +String source = "warm-service"
+      +String moduleId
+      +Map<String, Object> payload
+      +Long timestamp
+    }
+
+    class Command {
+      +String action (ON, OFF, SET_TEMP)
+      +Map<String, Object> params
+      +String targetDeviceId
+    }
+
+    class Telemetry {
+      +String sensorId
+      +Float value
+      +String type (temperature, status)
+      +Long timestamp
+    }
+  }
+}
+
+' Связи между классами
+WarmUseCase --> WarmSensor : uses
+WarmHandler --> WarmUseCase : uses
+WarmUseCase --> WarmRepositoryInterface : depends on
+WarmRepository --> WarmRepositoryInterface : implements
+WarmRepository --> db : JDBC/SQL
+
+WarmUseCase --> SensorConnector : sends commands
+WarmUseCase --> SmartHomeMonolithConnector : controls legacy modules
+WarmUseCase --> TelemetryProducer : emits events
+
+SensorConnector --> Command : uses
+SensorConnector --> Telemetry : returns
+TelemetryProducer --> TelemetryEvent : creates
+TelemetryProducer --> rabbitmq : publish (AMQP)
+
+SmartHomeMonolithConnector --> monolith : HTTP POST
+
+device_service --> WarmHandler : REST API calls
+
+@enduml

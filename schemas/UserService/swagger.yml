@@ -1,0 +1,361 @@
+openapi: 3.0.3
+info:
+  title: User Service API
+  description: REST API для управления пользователями в системе "Умный дом"
+  version: 1.0.0
+  contact:
+    name: Денис Сайгин
+
+servers:
+  - url: https://api.warmhouse.ru/v1
+    description: Основной сервер
+  - url: http://localhost:8080/v1
+    description: Локальное окружение
+
+tags:
+  - name: Аутентификация
+    description: Вход, регистрация, восстановление пароля
+  - name: Профиль
+    description: Управление данными пользователя
+  - name: Безопасность
+    description: Управление сессиями и токенами
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      required:
+        - id
+        - email
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-7890-g1h2-i3j4k5l6m7n8"
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        name:
+          type: string
+          example: "Иван Иванов"
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+          example: "https://cdn.warmhouse.ru/avatars/123.jpg"
+        language:
+          type: string
+          enum: [ru, en]
+          default: ru
+          example: "ru"
+        theme:
+          type: string
+          enum: [light, dark]
+          default: light
+          example: "dark"
+        role:
+          type: string
+          enum: [owner, guest, admin]
+          default: owner
+          example: "owner"
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-01-15T10:30:00Z"
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+
+    LoginResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxx"
+        token_type:
+          type: string
+          example: "Bearer"
+        expires_in:
+          type: integer
+          example: 3600
+        refresh_token:
+          type: string
+          example: "dgr54300xxxxxxxx"
+
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - name
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+        name:
+          type: string
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        avatar_url:
+          type: string
+          format: uri
+        language:
+          type: string
+          enum: [ru, en]
+        theme:
+          type: string
+          enum: [light, dark]
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "invalid_credentials"
+        message:
+          type: string
+          example: "Неверный email или пароль"
+        status:
+          type: integer
+          example: 401
+
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/register:
+    post:
+      tags: [Аутентификация]
+      summary: Регистрация нового пользователя
+      description: Создаёт нового пользователя и возвращает токены доступа
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Пользователь успешно зарегистрирован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Некорректные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/login:
+    post:
+      tags: [Аутентификация]
+      summary: Аутентификация пользователя
+      description: Возвращает JWT-токены при успешном входе
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Успешный вход
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Ошибка аутентификации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/refresh:
+    post:
+      tags: [Аутентификация]
+      summary: Обновление access token
+      description: Использует refresh token для получения новых токенов
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: Токены успешно обновлены
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Недействительный refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /users/me:
+    get:
+      tags: [Профиль]
+      summary: Получить текущего пользователя
+      description: Возвращает данные авторизованного пользователя
+      responses:
+        '200':
+          description: Данные пользователя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    patch:
+      tags: [Профиль]
+      summary: Обновить профиль
+      description: Изменяет имя, аватар, язык, тему интерфейса
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Профиль успешно обновлён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Некорректные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/logout:
+    post:
+      tags: [Безопасность]
+      summary: Выход из системы
+      description: Инвалидирует текущий refresh token
+      responses:
+        '204':
+          description: Успешный выход (нет содержимого)
+        '401':
+          description: Неавторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/forgot-password:
+    post:
+      tags: [Аутентификация]
+      summary: Запрос на сброс пароля
+      description: Отправляет письмо со ссылкой для сброса пароля
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Письмо отправлено
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Письмо для сброса пароля отправлено"
+        '404':
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/reset-password:
+    post:
+      tags: [Аутентификация]
+      summary: Сброс пароля
+      description: Устанавливает новый пароль по токену
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, new_password]
+              properties:
+                token:
+                  type: string
+                  description: Токен из ссылки
+                new_password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Пароль успешно изменён
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Пароль успешно изменён"
+        '400':
+          description: Некорректный токен или пароль
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'

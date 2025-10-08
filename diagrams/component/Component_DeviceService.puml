@@ -1,0 +1,46 @@
+@startuml Component_DeviceService
+title SmartHome: Device Service — Component Diagram
+
+!includeurl ../c4/C4_Component.puml
+
+Container(ApiGateway, "API Gateway", "Kong", "Маршрутизация запросов")
+
+System_Ext(WarmSensor, "Warm Sensor", "Модуль отопления", "HTTP/MQTT")
+System_Ext(LightSensor, "Light Sensor", "Модуль освещения", "HTTP/MQTT")
+System_Ext(DoorSensor, "Door Sensor", "Модуль ворот", "HTTP/MQTT")
+System_Ext(VideoSensor, "Video Sensor", "Модуль видеонаблюдения", "RTSP/HTTP")
+System_Ext(UniversalSensor, "Universal Sensor", "Универсальный модуль", "HTTP/MQTT")
+
+Container_Boundary(DeviceDomain, "Управление устройствами") {
+  ContainerDb(DeviceDatabase, "Device & Automation DB", "PostgreSQL", "Хранение:\n* Привязки устройств к пользователям\n* Локаций (комнаты)\n* Статусов устройств\n* Конфигураций сценариев")
+  Container(AutomationService, "Automation Service", "Go", "Создание и выполнение сценариев")
+
+  Container(DeviceService, "Device Service", "Go") {
+
+    Component(HttpApiLayer, "HTTP API Layer", "REST-интерфейс управления устройствами")
+    Component(DeviceServiceLayer, "Device Service Layer", "Бизнес-логика:\n* Добавление/удаление устройств\n* Привязка к пользователю\n* Установка локации (комната)\n* Проверка доступа")
+    Component(Registry, "Device Registry", "Реестр устройств:\n* Активные устройства\n* Тип, протокол\n* Время последнего подключения")
+    Component(HealthChecker, "Health Checker", "Опрос устройств:* Статус онлайн/оффлайн\n* Периодическая проверка")
+    Component(RepositoryLayer, "Repository Layer", "Доступ к PostgreSQL:\n* CRUD операции")
+
+    Rel(HttpApiLayer, DeviceServiceLayer, "Запрос на добавление/удаление", "direct call")
+    Rel(DeviceServiceLayer, Registry, "Регистрация нового устройства", "in-memory + DB")
+    Rel(HealthChecker, Registry, "Запуск проверки работоспособности", "async job")
+    
+    Rel(DeviceServiceLayer, RepositoryLayer, "Чтение/обновление данных", "SQL")
+    Rel(Registry, RepositoryLayer, "Сохранение метаданных устройства", "SQL")
+    Rel(HealthChecker, RepositoryLayer, "Обновление статуса устройства", "SQL")
+    Rel(RepositoryLayer, DeviceDatabase, "JDBC / SQL", "SQL")
+  }
+}
+
+Rel(ApiGateway, HttpApiLayer, "Проксирование запросов", "HTTPS")
+Rel(AutomationService, HttpApiLayer, "Получение списка устройств для триггеров", "REST")
+
+Rel(Registry, WarmSensor, "Регистрация модуля, отправка команд модулю", "MQTT/HTTP")
+Rel(Registry, LightSensor, "Регистрация модуля, отправка команд модулю", "MQTT/HTTP")
+Rel(Registry, DoorSensor, "Регистрация модуля, отправка команд модулю", "MQTT/HTTP")
+Rel(Registry, VideoSensor, "Регистрация модуля, отправка команд модулю", "RTSP/HTTP")
+Rel(Registry, UniversalSensor, "Регистрация модуля, отправка команд модулю", "MQTT/HTTP")
+
+@enduml
