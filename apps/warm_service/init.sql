@@ -21,6 +21,6 @@ CREATE TABLE IF NOT EXISTS warm_sensors (
 );
 
 -- Create indexes for common queries
-CREATE INDEX IF NOT EXISTS idx_warm_modules_device_id ON warm_modules (device_id);
+CREATE INDEX IF NOT EXISTS idx_warm_sensors_device_id ON warm_sensors (device_id);
 CREATE INDEX IF NOT EXISTS idx_warm_sensors_location ON warm_sensors(location);
 CREATE INDEX IF NOT EXISTS idx_warm_sensors_status ON warm_sensors(status);

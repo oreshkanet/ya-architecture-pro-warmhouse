@@ -40,7 +40,44 @@ func (h *Handler) sendDeviceCommand(c *gin.Context) {
 		case errors.Is(err, service.ErrUnsupportedDeviceType):
 			c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported device type"})
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to send command"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to send command: " + err.Error()})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "command sent"})
+}
+
+func (h *Handler) setDeviceValues(c *gin.Context) {
+	var req SetValuesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	if req.UserId == uuid.Nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	deviceID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid device id"})
+		return
+	}
+
+	err = h.deviceService.SetValuesToDevice(c.Request.Context(), req.UserId, deviceID, req.Values)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrDeviceNotFound):
+			c.JSON(http.StatusNotFound, gin.H{
+				"error":   "device_not_found",
+				"message": "Устройство не найдено",
+			})
+		case errors.Is(err, service.ErrUnsupportedDeviceType):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported device type"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to send command: " + err.Error()})
 		}
 		return
 	}

@@ -73,7 +73,7 @@ func (r *WarmRepo) GetAll(ctx context.Context, location, status string) ([]*doma
 
 func (r *WarmRepo) GetByID(ctx context.Context, id string) (*domain.WarmSensor, error) {
 	query := `SELECT id, device_id, name, location, serial_number, is_on, current_temperature,
-		target_temperature, status, firmware_version, last_seen, is_legacy, telemetry_url
+		target_temperature, status, firmware_version, last_seen, is_legacy, url
 		FROM warm_sensors WHERE id = $1`
 	var m domain.WarmSensor
 	var fw *string
@@ -91,8 +91,8 @@ func (r *WarmRepo) GetByID(ctx context.Context, id string) (*domain.WarmSensor, 
 func (r *WarmRepo) GetByDeviceID(ctx context.Context, deviceID string) ([]*domain.WarmSensor, error) {
 	query := `
 		SELECT id, device_id, name, location, serial_number, is_on, current_temperature,
-		       target_temperature, status, firmware_version, last_seen, is_legacy, telemetry_url
-		FROM warm_modules
+		       target_temperature, status, firmware_version, last_seen, is_legacy, url
+		FROM warm_sensors
 		WHERE device_id = $1
 	`
 	rows, err := r.db.Query(ctx, query, deviceID)

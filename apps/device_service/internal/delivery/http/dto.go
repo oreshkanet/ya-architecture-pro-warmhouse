@@ -18,13 +18,18 @@ type TemperatureResponse struct {
 }
 
 type SensorValue struct {
-	Value interface{} `json:"value"`
-	Unit  string      `json:"unit,omitempty"`
+	Value any    `json:"value"`
+	Unit  string `json:"unit,omitempty"`
 }
 
 type CommandRequest struct {
-	UserId  uuid.UUID `json:"device_id"`
+	UserId  uuid.UUID `json:"user_id"`
 	Command string    `json:"command"`
+}
+
+type SetValuesRequest struct {
+	UserId uuid.UUID      `json:"user_id"`
+	Values map[string]any `json:"values,omitempty"`
 }
 
 type DeviceStatusResponse struct {

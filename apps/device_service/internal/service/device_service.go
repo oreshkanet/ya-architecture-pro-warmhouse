@@ -59,6 +59,46 @@ func (s *DeviceService) SendCommandToDevice(ctx context.Context, userID uuid.UUI
 	return nil
 }
 
+func (s *DeviceService) SetValuesToDevice(ctx context.Context, userID uuid.UUID, deviceID uuid.UUID, val map[string]any) error {
+	device, err := s.deviceRepo.GetByID(ctx, deviceID)
+	if err != nil {
+		return fmt.Errorf("get device: %w", err)
+	}
+	if device == nil {
+		return ErrDeviceNotFound
+	}
+
+	if device.UserID != userID {
+		return ErrDeviceNotFound // для безопасности — не раскрываем существование
+	}
+
+	switch device.DeviceType {
+	case domain.DeviceTypeWarm:
+		return s.SetValuesToWarmDevice(ctx, userID, deviceID, val)
+	case domain.DeviceTypeLight:
+		// return s.lightClient.SendCommand(...)
+	case domain.DeviceTypeDoor:
+		// ...
+	case domain.DeviceTypeVideo:
+		// ...
+	case domain.DeviceTypeUniversal:
+		// ...
+	default:
+		return ErrUnsupportedDeviceType
+	}
+
+	return nil
+}
+
+func (s *DeviceService) SetValuesToWarmDevice(ctx context.Context, userID uuid.UUID, deviceID uuid.UUID, val map[string]any) error {
+	var err error
+	if t, ok := val["target_temperature"]; ok {
+		err = s.warmClient.SetTemperature(ctx, deviceID.String(), t.(float64))
+	}
+
+	return err
+}
+
 func (s *DeviceService) CreateDevice(ctx context.Context, userID uuid.UUID, req CreateDeviceRequest) (*domain.Device, error) {
 	device := &domain.Device{
 		UserID:       userID,
