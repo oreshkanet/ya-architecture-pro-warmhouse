@@ -8,56 +8,48 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
-	"warm-service/internal/client/telemetry"
-	"warm-service/internal/delivery/http"
-	"warm-service/internal/repository"
-	"warm-service/internal/service"
-
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/streadway/amqp"
+	"telemetry-service/internal/delivery/consumer"
+	"telemetry-service/internal/delivery/http"
+	"telemetry-service/internal/repository"
+	"telemetry-service/internal/service/aggregator"
+	"telemetry-service/internal/service/telemetry"
 )
-
-const migrations = "file://migrations"
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	dbURL := os.Getenv("DATABASE_URL")
-	dbName := os.Getenv("DATABASE_NAME")
-	rmqURL := os.Getenv("RABBITMQ_URL")
-	monolithURL := os.Getenv("MONOLITH_URL")
-
 	debugStr := os.Getenv("DEBUG")
 	isDebug, _ := strconv.ParseBool(debugStr)
 
-	// Подключение к RabbitMQ
-	rabbitConn, err := amqp.Dial(rmqURL)
-	if err != nil {
-		log.Fatal("RabbitMQ connect:", err)
-	}
-	defer rabbitConn.Close()
+	rmqURL := os.Getenv("RABBITMQ_URL")
+	rmqQueue := os.Getenv("RABBITMQ_QUEUE")
+	clhURL := os.Getenv("CLICKHOUSE_URL")
+	clhDb := os.Getenv("CLICKHOUSE_DATABASE")
 
-	publisher, err := telemetry.NewPublisher(rabbitConn)
+	// ClickHouse
+	repo, err := repository.NewClickHouseRepo(clhURL, clhDb)
 	if err != nil {
-		log.Fatal("RabbitMQ channel:", err)
+		log.Fatal("ClickHouse init failed:", err)
 	}
 
-	// Инициализация сервисов
-	pgxPool, err := pgxpool.New(ctx, dbURL+"/"+dbName)
-	if err != nil {
-		log.Fatal("pgx connect:", err)
-	}
-	defer pgxPool.Close()
+	// Aggregation Engine
+	engine := aggregator.NewAggregationEngine(repo)
 
-	repo := repository.NewWarmRepo(pgxPool)
-	warmService := service.NewWarmService(repo, publisher, monolithURL)
+	// RabbitMQ Consumer
+	rmq, err := consumer.NewRabbitMQConsumer(rmqURL, rmqQueue, engine)
+	if err != nil {
+		log.Fatal("RabbitMQ init failed:", err)
+	}
+	go rmq.Start()
 
 	// Создаём HTTP-сервер
-	httpServer := http.NewHttpService("8084", isDebug)
+	httpServer := http.NewHttpService("8089", isDebug)
+
+	telemetryService := telemetry.NewTelemetryService(repo)
 
 	// Регистрируем маршруты
-	handler := http.NewHandler(warmService)
+	handler := http.NewHandler(telemetryService)
 	handler.InitRoutes(httpServer.Engine())
 
 	// Канал для сигналов ОС
@@ -65,11 +57,9 @@ func main() {
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(sigCh)
 
-	warmService.StartTelemetryCollection(ctx)
-
 	// Запускаем сервер в отдельной горутине
 	go func() {
-		log.Println("Запуск HTTP-сервера на :8084")
+		log.Println("Запуск HTTP-сервера на :8089")
 		if err := httpServer.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("Ошибка запуска HTTP-сервера: %v", err)
 		}

@@ -44,6 +44,28 @@ services:
     networks:
       - smarthome-network
 
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.8
+    container_name: clickhouse
+    ports:
+      - "8123:8123"  # HTTP
+      - "9000:9000"  # Native TCP
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - clickhouse_log:/var/log/clickhouse-server
+      - ./telemetry_service/init.sql:/docker-entrypoint-initdb.d/telemetry_service.sql:ro
+    environment:
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - smarthome-network
+
   temperature-api:
     build:
       context: ./temperature_api
@@ -110,10 +132,30 @@ services:
     networks:
       - smarthome-network
 
+  telemetry-service:
+    build:
+      context: ./telemetry_service
+      dockerfile: Dockerfile
+    container_name: telemetry-service
+    ports:
+      - "8089:8089"
+    environment:
+      - RABBITMQ_URL=amqp://rabbitmq:rabbitmq@rabbitmq:5672
+      - RABBITMQ_QUEUE=telemetry
+      - CLICKHOUSE_URL=clickhouse:8123
+      - CLICKHOUSE_DATABASE=default
+    depends_on:
+      - postgres
+    restart: on-failure
+    networks:
+      - smarthome-network
+
 volumes:
   postgres_data:
   rabbitmq_data:
   rabbitmq_log:
+  clickhouse_data:
+  clickhouse_log:
 
 networks:
   smarthome-network:
